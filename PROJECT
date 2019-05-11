@@ -1,3 +1,7 @@
 domain: jdwl.in
 repo: jdwl.in/operator
+resources:
+- group: operators
+  kind: Tenant
+  version: v1alpha1
 version: "2"
