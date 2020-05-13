@@ -1,6 +1,6 @@
 
 # Image URL to use all building/pushing image targets
-IMG ?= controller:latest
+IMG ?= dfang/jdwl-operator-controller:latest
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true"
 
@@ -50,9 +50,15 @@ fmt:
 vet:
 	go vet ./...
 
+sample:
+	kubectl apply -f config/samples/
+
 # Generate code
 generate: controller-gen
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
+
+build:
+	go build -o bin/tenant cmd/main.go
 
 # Build the docker image
 docker-build: test

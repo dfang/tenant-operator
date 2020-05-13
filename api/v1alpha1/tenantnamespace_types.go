@@ -23,43 +23,39 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-// TenantSpec defines the desired state of Tenant
-type TenantSpec struct {
+// TenantNamespaceSpec defines the desired state of TenantNamespace
+type TenantNamespaceSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	UUID  string `json:"uuid,omitempty"`
-	CName string `json:"cname,omitempty"`
+	Name string `json:"name,omitempty"`
 }
 
-// TenantStatus defines the observed state of Tenant
-type TenantStatus struct {
+// TenantNamespaceStatus defines the observed state of TenantNamespace
+type TenantNamespaceStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	URL string `json:"url,omitempty"`
 }
 
 // +kubebuilder:object:root=true
-// +kubebuilder:subresource:status
-// +kubebuilder:printcolumn:JSONPath=".status.url",name="URL",type="string"
 
-// Tenant is the Schema for the tenants API
-type Tenant struct {
+// TenantNamespace is the Schema for the tenantnamespaces API
+type TenantNamespace struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   TenantSpec   `json:"spec,omitempty"`
-	Status TenantStatus `json:"status,omitempty"`
+	Spec   TenantNamespaceSpec   `json:"spec,omitempty"`
+	Status TenantNamespaceStatus `json:"status,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 
-// TenantList contains a list of Tenant
-type TenantList struct {
+// TenantNamespaceList contains a list of TenantNamespace
+type TenantNamespaceList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []Tenant `json:"items"`
+	Items           []TenantNamespace `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&Tenant{}, &TenantList{})
+	SchemeBuilder.Register(&TenantNamespace{}, &TenantNamespaceList{})
 }

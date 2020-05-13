@@ -1,0 +1,8 @@
+# Example configuration for the webserver
+# at https://github.com/monopole/hello
+commonLabels:
+  app: tenant
+
+resources:
+- operators_v1alpha1_tenantnamespace.yaml
+- operators_v1alpha1_tenant.yaml

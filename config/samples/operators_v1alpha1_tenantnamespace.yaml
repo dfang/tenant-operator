@@ -1,0 +1,7 @@
+apiVersion: operators.jdwl.in/v1alpha1
+kind: TenantNamespace
+metadata:
+  name: tenantnamespace-sample
+spec:
+  # Add fields here
+  name: 35ac801ee5b5f7ca
