@@ -21,10 +21,10 @@ import (
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/discovery/cached/memory"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
 	"k8s.io/client-go/tools/clientcmd"
+
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
@@ -98,8 +98,6 @@ func (r *TenantReconciler) desiredService(tenant operatorsv1alpha1.Tenant) (core
 func (r *TenantReconciler) desiredIngressRoute(tenant operatorsv1alpha1.Tenant) error {
 	log := r.Log.WithValues("tenant", tenant.Namespace)
 
-	// get namespace status, if it's been terminating, just return
-
 	// TODO
 	// make this controller run in cluster and out of cluster of cluster (make run)
 	kubeconfig := filepath.Join(os.Getenv("HOME"), ".kube", "config")
@@ -112,19 +110,6 @@ func (r *TenantReconciler) desiredIngressRoute(tenant operatorsv1alpha1.Tenant) 
 	// if err != nil {
 	// 	panic(err.Error())
 	// }
-
-	clientset, err := kubernetes.NewForConfig(config)
-
-	// query namespace by name, if not exist, create it
-	ns, err := clientset.CoreV1().Namespaces().Get(tenant.Namespace, metav1.GetOptions{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: corev1.SchemeGroupVersion.String(), Kind: "Namespace",
-		},
-	})
-
-	if ns.Status.Phase == corev1.NamespaceTerminating {
-		return nil
-	}
 
 	log.Info("reconciling ingressRoute")
 	data := struct {
