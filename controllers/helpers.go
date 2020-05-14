@@ -100,16 +100,14 @@ func (r *TenantReconciler) desiredIngressRoute(tenant operatorsv1alpha1.Tenant) 
 
 	// TODO
 	// make this controller run in cluster and out of cluster of cluster (make run)
-	kubeconfig := filepath.Join(os.Getenv("HOME"), ".kube", "config")
-	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	config, err := rest.InClusterConfig()
 	if err != nil {
-		panic(err)
+		kubeconfig := filepath.Join(os.Getenv("HOME"), ".kube", "config")
+		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
+		if err != nil {
+			panic(err)
+		}
 	}
-	// creates the in-cluster config
-	// config, err := rest.InClusterConfig()
-	// if err != nil {
-	// 	panic(err.Error())
-	// }
 
 	log.Info("reconciling ingressRoute")
 	data := struct {
