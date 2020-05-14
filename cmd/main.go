@@ -85,8 +85,23 @@ func main() {
 				Name:    "add",
 				Aliases: []string{"a"},
 				Usage:   "add a tenant",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:  "cname",
+						Usage: "cname for tenant",
+					},
+					&cli.StringFlag{
+						Name:  "uuid",
+						Usage: "uuid for tenant",
+					},
+				},
 				Action: func(c *cli.Context) error {
-					addTenant(kv)
+					// if c.NArg() > 0 {
+					// }
+					// fmt.Println(c.Args())
+					// fmt.Println(c.String("cname"))
+					// fmt.Println(c.String("uuid"))
+					addTenant(kv, c.String("uuid"), c.String("cname"))
 					return nil
 				},
 			},
@@ -131,25 +146,38 @@ func main() {
 	// fmt.Printf("KV: %v %s\n", pair.Key, pair.Value)
 }
 
-func addTenant(kv *api.KV) error {
-	tenantKey, _ := randomHex(10)
-	uuid := "tenants/" + tenantKey + "/uuid"
-	cname := "tenants/" + tenantKey + "/cname"
+func addTenant(kv *api.KV, uuid, cname string) error {
+	var tenantKey string
+	var cnameV string
+
+	if uuid == "" {
+		tenantKey, _ = randomHex(10)
+	} else {
+		tenantKey = uuid
+	}
+
+	if cname == "" {
+		haikunator := haikunator.New()
+		haikunator.TokenLength = 9
+		haikunator.TokenHex = true
+		cnameV = haikunator.Haikunate()
+	} else {
+		cnameV = cname
+	}
+
+	uuidKey := "tenants/" + tenantKey + "/uuid"
+	cnameKey := "tenants/" + tenantKey + "/cname"
 
 	// PUT a new KV pair
-	p := &api.KVPair{Key: uuid, Value: []byte(tenantKey)}
+	p := &api.KVPair{Key: uuidKey, Value: []byte(tenantKey)}
 	_, err := kv.Put(p, nil)
 	if err != nil {
 		fmt.Println(err)
 		return err
 	}
 
-	haikunator := haikunator.New()
-	haikunator.TokenLength = 9
-	haikunator.TokenHex = true
-
 	// PUT a new KV pair
-	p1 := &api.KVPair{Key: cname, Value: []byte(haikunator.Haikunate())}
+	p1 := &api.KVPair{Key: cnameKey, Value: []byte(cnameV)}
 	_, err = kv.Put(p1, nil)
 	if err != nil {
 		fmt.Println(err)
@@ -190,7 +218,7 @@ func addTenant(kv *api.KV) error {
 		os.Exit(1)
 	}
 
-	fmt.Println("Create namespace")
+	// fmt.Println("Create namespace")
 	createNamespace(string(p1.Value))
 
 	// fmt.Println("Create tenant namespace")
@@ -201,7 +229,7 @@ func addTenant(kv *api.KV) error {
 	// 	os.Exit(1)
 	// }
 
-	fmt.Println("Create tenant")
+	fmt.Printf("Created tenant, uuid: %s, cname: %s\n", tenantKey, cnameV)
 	err = cl.Create(context.Background(), &tn)
 	if err != nil {
 		fmt.Println("failed to create tenant")
@@ -288,7 +316,7 @@ func listTenants(kv *api.KV) {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 5, ' ', tabwriter.AlignRight)
-	fmt.Fprintln(w, "UID\t\tCName")
+	fmt.Fprintln(w, "UID\t\tCName\t\tURL")
 	for _, v := range keys {
 		uuid, _, err := kv.Get(v+"uuid", nil)
 		if err != nil {
@@ -298,7 +326,7 @@ func listTenants(kv *api.KV) {
 		if err != nil {
 			panic(err)
 		}
-		fmt.Fprintf(w, "%s\t\t%s\n", uuid.Value, cname.Value)
+		fmt.Fprintf(w, "%s\t\t%s\t\t%s\n", uuid.Value, cname.Value, fmt.Sprintf("http://%s.jdwl.in", cname.Value))
 	}
 	w.Flush()
 }
@@ -333,11 +361,11 @@ func createNamespace(nsName string) error {
 				Labels: map[string]string{"owner": "tenant"},
 			},
 		}
-		ns, err := clientset.CoreV1().Namespaces().Create(nsSpec)
+		_, err := clientset.CoreV1().Namespaces().Create(nsSpec)
 		if err != nil {
 			panic(err)
 		}
-		fmt.Println(ns.Name)
+		// fmt.Println(ns.Name)
 	}
 
 	return nil
