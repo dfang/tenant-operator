@@ -133,26 +133,46 @@ func (r *TenantReconciler) desiredIngressRoute(tenant operatorsv1alpha1.Tenant) 
 		panic(err)
 	}
 
-	if err = doSSA(context.Background(), config, buf.String()); err != nil {
+	yamlContent := buf.String()
+	_, err = doSSA(context.Background(), config, yamlContent, tenant)
+	if err != nil {
 		panic(err.Error())
 	}
+
+	// // don't forget to set owner reference, otherwise infinite reconcile loop
+	// if err := ctrl.SetControllerReference(&tenant, unstructuredObj, r.Scheme); err != nil {
+	// 	fmt.Println(err)
+	// 	return err
+	// }
+
+	// metav1.OwnerReference{
+	//   Kind: "Tenant",
+	//   Name: "",
+	//   UID:
+	// }
+
+	// dr.SetOwnerReferences(metav1.OwnerReference{
+	//   Controller:
+	//   Name:
+	// })
+
 	return nil
 }
 
 // do server side side apply yaml
-func doSSA(ctx context.Context, cfg *rest.Config, yamlContent string) error {
+func doSSA(ctx context.Context, cfg *rest.Config, yamlContent string, tenant operatorsv1alpha1.Tenant) (*unstructured.Unstructured, error) {
 
 	// 1. Prepare a RESTMapper to find GVR
 	dc, err := discovery.NewDiscoveryClientForConfig(cfg)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	mapper := restmapper.NewDeferredDiscoveryRESTMapper(memory.NewMemCacheClient(dc))
 
 	// 2. Prepare the dynamic client
 	dyn, err := dynamic.NewForConfig(cfg)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// 3. Decode YAML manifest into unstructured.Unstructured
@@ -160,13 +180,13 @@ func doSSA(ctx context.Context, cfg *rest.Config, yamlContent string) error {
 	obj := &unstructured.Unstructured{}
 	_, gvk, err := decUnstructured.Decode([]byte(yamlContent), nil, obj)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// 4. Find GVR
 	mapping, err := mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// 5. Obtain REST interface for the GVR
@@ -179,18 +199,36 @@ func doSSA(ctx context.Context, cfg *rest.Config, yamlContent string) error {
 		dr = dyn.Resource(mapping.Resource)
 	}
 
+	// set owner references
+	fmt.Println("set owner reference")
+	fmt.Println("UID: ", tenant.UID)
+	fmt.Println("Name: ", tenant.Spec.CName)
+	fmt.Println("Kind: ", "Tenant")
+	fmt.Println("APIVersion: ", "operators.jdwl.in/v1alpha1")
+
+	obj.SetOwnerReferences([]metav1.OwnerReference{
+		metav1.OwnerReference{
+			Kind:       "Tenant",
+			Name:       tenant.Spec.CName,
+			UID:        tenant.UID,
+			APIVersion: "operators.jdwl.in/v1alpha1",
+		},
+	})
+
 	// 6. Marshal object into JSON
 	data, err := json.Marshal(obj)
 	if err != nil {
-		return err
+		return nil, err
 	}
+
+	fmt.Println(string(data))
 
 	// 7. Create or Update the object with SSA
 	//     types.ApplyPatchType indicates SSA.
 	//     FieldManager specifies the field owner ID.
-	_, err = dr.Patch(obj.GetName(), types.ApplyPatchType, data, metav1.PatchOptions{
+	unstructuredObj, err := dr.Patch(obj.GetName(), types.ApplyPatchType, data, metav1.PatchOptions{
 		FieldManager: "tenant-controller",
 	})
 
-	return err
+	return unstructuredObj, err
 }

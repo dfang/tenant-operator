@@ -146,12 +146,12 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	// 	return ctrl.Result{}, err
 	// }
 
+	applyOpts := []client.PatchOption{client.ForceOwnership, client.FieldOwner("tenant-controller")}
+
 	deployment, err := r.desiredDeployment(tenant)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-
-	applyOpts := []client.PatchOption{client.ForceOwnership, client.FieldOwner("tenant-controller")}
 	err = r.Patch(ctx, &deployment, client.Apply, applyOpts...)
 	if err != nil {
 		return ctrl.Result{}, err
