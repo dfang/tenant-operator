@@ -1,0 +1,61 @@
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: {{ .Name }}
+  namespace: {{ .Namespace }}
+  labels:
+    owner: tenant
+spec:
+  entryPoints:
+    - web
+  routes:
+  - match: Host("{{ .Host }}")
+    kind: Rule
+    services:
+    - name: {{ .ServiceName }}
+      namespace: {{ .Namespace }}
+      port: 80
+
+# apiVersion: traefik.containo.us/v1alpha1
+# kind: IngressRoute
+# metadata:
+#   name: foo
+# spec:
+#   entryPoints:                      
+#     - tenant-sample
+#   routes:                           
+#   - kind: Rule
+#     match: Host(`15d99242e9f7235d220d.jdwl.in`) 
+#     priority: 10                    
+#     services:                       
+#     - kind: Service
+#       name: tenant-sample
+#       namespace: default
+#       passHostHeader: true
+#       port: 80
+#       responseForwarding:
+#         flushInterval: 1ms
+#       scheme: http
+#       sticky:
+#         cookie:
+#           httpOnly: true
+#           name: cookie
+#           secure: true
+#           sameSite: none
+#       strategy: RoundRobin
+#       weight: 10
+
+# # dashboard.yaml
+# apiVersion: traefik.containo.us/v1alpha1
+# kind: IngressRoute
+# metadata:
+#   name: dashboard
+# spec:
+#   entryPoints:
+#     - web
+#   routes:
+#     - match: Host(`traefik.localhost`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))
+#       kind: Rule
+#       services:
+#         - name: api@internal
+#           kind: TraefikService

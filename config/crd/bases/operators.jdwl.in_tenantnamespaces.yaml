@@ -6,24 +6,20 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.4.0
   creationTimestamp: null
-  name: tenants.operators.jdwl.in
+  name: tenantnamespaces.operators.jdwl.in
 spec:
   group: operators.jdwl.in
   names:
-    kind: Tenant
-    listKind: TenantList
-    plural: tenants
-    singular: tenant
+    kind: TenantNamespace
+    listKind: TenantNamespaceList
+    plural: tenantnamespaces
+    singular: tenantnamespace
   scope: Namespaced
   versions:
-  - additionalPrinterColumns:
-    - jsonPath: .status.url
-      name: URL
-      type: string
-    name: v1alpha1
+  - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: Tenant is the Schema for the tenants API
+        description: TenantNamespace is the Schema for the tenantnamespaces API
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
@@ -34,28 +30,18 @@ spec:
           metadata:
             type: object
           spec:
-            description: TenantSpec defines the desired state of Tenant
+            description: TenantNamespaceSpec defines the desired state of TenantNamespace
             properties:
-              cname:
-                type: string
-              uuid:
+              name:
                 description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster Important: Run "make" to regenerate code after modifying this file'
                 type: string
             type: object
           status:
-            description: TenantStatus defines the observed state of Tenant
-            properties:
-              cname:
-                description: 'INSERT ADDITIONAL STATUS FIELD - define observed state of cluster Important: Run "make" to regenerate code after modifying this file'
-                type: string
-              url:
-                type: string
+            description: TenantNamespaceStatus defines the observed state of TenantNamespace
             type: object
         type: object
     served: true
     storage: true
-    subresources:
-      status: {}
 status:
   acceptedNames:
     kind: ""

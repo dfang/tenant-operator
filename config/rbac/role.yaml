@@ -7,6 +7,44 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - get
+  - list
+  - patch
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - services
+  verbs:
+  - get
+  - list
+  - patch
+  - watch
+- apiGroups:
+  - operators.jdwl.in
+  resources:
+  - tenantnamespaces
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - operators.jdwl.in
+  resources:
+  - tenantnamespaces/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
   - operators.jdwl.in
   resources:
   - tenants
