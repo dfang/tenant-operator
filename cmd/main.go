@@ -106,6 +106,27 @@ func main() {
 				},
 			},
 			{
+				Name:    "update",
+				Aliases: []string{"u"},
+				Usage:   "update a tenant cname",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:     "cname",
+						Required: true,
+						Usage:    "cname for tenant",
+					},
+					&cli.StringFlag{
+						Name:     "uuid",
+						Required: true,
+						Usage:    "uuid for tenant",
+					},
+				},
+				Action: func(c *cli.Context) error {
+					updateTenant(kv, c.String("uuid"), c.String("cname"))
+					return nil
+				},
+			},
+			{
 				Name:    "delete",
 				Aliases: []string{"d"},
 				Usage:   "delete a tenant",
@@ -118,8 +139,8 @@ func main() {
 			},
 			{
 				Name:    "purge",
-				Aliases: []string{"l"},
-				Usage:   "purge tenants",
+				Aliases: []string{"c"},
+				Usage:   "purge all tenants",
 				Action: func(c *cli.Context) error {
 					purgeTenants(kv)
 					return nil
@@ -329,6 +350,27 @@ func listTenants(kv *api.KV) {
 		fmt.Fprintf(w, "%s\t\t%s\t\t%s\n", uuid.Value, cname.Value, fmt.Sprintf("http://%s.jdwl.in", cname.Value))
 	}
 	w.Flush()
+}
+
+// updateTenant cname
+func updateTenant(kv *api.KV, uuid, cname string) error {
+
+	// uuidKey := "tenants/" + uuid + "/uuid"
+	// uuidPair, _, err := kv.Get(uuidKey, nil)
+	// if err != nil {
+	// 	fmt.Println(err)
+	// 	return err
+	// }
+
+	// PUT a KV pair
+	p1 := &api.KVPair{Key: "tenants/" + uuid + "/cname", Value: []byte(cname)}
+	_, err := kv.Put(p1, nil)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	return nil
 }
 
 func randomHex(n int) (string, error) {
