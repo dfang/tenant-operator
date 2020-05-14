@@ -35,7 +35,8 @@ type TenantSpec struct {
 type TenantStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	URL string `json:"url,omitempty"`
+	CName string `json:"cname,omitempty"`
+	URL   string `json:"url,omitempty"`
 }
 
 // +kubebuilder:object:root=true

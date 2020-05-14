@@ -45,8 +45,10 @@ spec:
           status:
             description: TenantStatus defines the observed state of Tenant
             properties:
-              url:
+              cname:
                 description: 'INSERT ADDITIONAL STATUS FIELD - define observed state of cluster Important: Run "make" to regenerate code after modifying this file'
+                type: string
+              url:
                 type: string
             type: object
         type: object

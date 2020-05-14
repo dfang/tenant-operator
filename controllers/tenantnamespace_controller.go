@@ -97,7 +97,8 @@ func (r *TenantNamespaceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 				Kind:       "Namespace",
 			},
 			ObjectMeta: metav1.ObjectMeta{
-				Name: tenantNsName,
+				Name:   tenantNsName,
+				Labels: map[string]string{"namespace-for-tenant": "true"},
 				// Annotations: map[string]string{
 				// 	TenantAdminNamespaceAnnotation: instance.Namespace,
 				// },

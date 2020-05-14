@@ -19,13 +19,10 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/go-logr/logr"
 	operatorsv1alpha1 "jdwl.in/operator/api/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -56,36 +53,36 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	nsSpec := &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: tenant.Spec.UUID,
-			Labels: map[string]string{
-				"namespace": tenant.Spec.UUID,
-			},
-		},
-	}
-	found := false
-	// Fetch namespace list
-	nsList := &corev1.NamespaceList{}
-	err := r.List(context.TODO(), nsList, &client.ListOptions{})
-	if err != nil {
-		return ctrl.Result{}, err
-	}
+	// nsSpec := &corev1.Namespace{
+	// 	ObjectMeta: metav1.ObjectMeta{
+	// 		Name: tenant.Spec.UUID,
+	// 		Labels: map[string]string{
+	// 			"namespace": tenant.Spec.UUID,
+	// 		},
+	// 	},
+	// }
+	// found := false
+	// // Fetch namespace list
+	// nsList := &corev1.NamespaceList{}
+	// err := r.List(context.TODO(), nsList, &client.ListOptions{})
+	// if err != nil {
+	// 	return ctrl.Result{}, err
+	// }
 
-	for _, v := range nsList.Items {
-		fmt.Println(v.Name)
-		if v.Name == nsSpec.Name {
-			found = true
-		}
-	}
+	// for _, v := range nsList.Items {
+	// 	fmt.Println(v.Name)
+	// 	if v.Name == nsSpec.Name {
+	// 		found = true
+	// 	}
+	// }
 
-	if !found {
-		if err := r.Client.Create(ctx, nsSpec); err != nil {
-			fmt.Println("failed to create namespace")
-			fmt.Println(err)
-			os.Exit(1)
-		}
-	}
+	// if !found {
+	// 	if err := r.Client.Create(ctx, nsSpec); err != nil {
+	// 		fmt.Println("failed to create namespace")
+	// 		fmt.Println(err)
+	// 		os.Exit(1)
+	// 	}
+	// }
 
 	// tenantNs := &corev1.Namespace{
 	// 	TypeMeta: metav1.TypeMeta{
@@ -133,8 +130,13 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-
 	err = r.Patch(ctx, &svc, client.Apply, applyOpts...)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// server side apply generated yaml
+	err = r.desiredIngressRoute(tenant)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -142,16 +144,14 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	log.Info(tenant.Spec.UUID)
 	log.Info(tenant.Spec.CName)
 
-	tenant.Status.URL = fmt.Sprintf("http://%s.jdwl.in", tenant.Spec.UUID)
+	tenant.Status.URL = fmt.Sprintf("http://%s.jdwl.in", tenant.Spec.CName)
 	err = r.Status().Update(ctx, &tenant)
 	if err != nil {
 		fmt.Println(err)
-		log.Info("FUCK3")
 		return ctrl.Result{}, err
 	}
 
 	log.Info("reconciled tenant")
-	// your logic here
 
 	return ctrl.Result{}, nil
 }
