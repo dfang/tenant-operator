@@ -37,11 +37,14 @@ type TenantStatus struct {
 	// Important: Run "make" to regenerate code after modifying this file
 	CName string `json:"cname,omitempty"`
 	URL   string `json:"url,omitempty"`
+	// Custom Domain
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:printcolumn:JSONPath=".status.url",name="URL",type="string"
+// +kubebuilder:printcolumn:name="UUID",JSONPath=".spec.uuid",type="string",description="UUID of the tenant"
+// +kubebuilder:printcolumn:name="CName",JSONPath=".spec.cname",type="string",description="CName of the tenant"
+// +kubebuilder:printcolumn:name="URL",JSONPath=".status.url",type="string"
 
 // Tenant is the Schema for the tenants API
 type Tenant struct {

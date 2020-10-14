@@ -17,6 +17,14 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
+    - description: UUID of the tenant
+      jsonPath: .spec.uuid
+      name: UUID
+      type: string
+    - description: CName of the tenant
+      jsonPath: .spec.cname
+      name: CName
+      type: string
     - jsonPath: .status.url
       name: URL
       type: string
