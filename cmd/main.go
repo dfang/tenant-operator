@@ -57,7 +57,8 @@ func main() {
 		Action: func(c *cli.Context) error {
 			// fmt.Println("boom! I say!")
 			// cli.ShowAppHelp(c)
-			listTenants(kv)
+			// fmt.Println(c.Args())
+			listTenants(kv, c)
 			return nil
 		},
 		Flags: []cli.Flag{
@@ -76,8 +77,16 @@ func main() {
 				Name:    "list",
 				Aliases: []string{"l"},
 				Usage:   "list tenants",
+				// SkipFlagParsing: true,
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:  "o",
+						Usage: "output (-o uuid,cname)",
+					},
+				},
 				Action: func(c *cli.Context) error {
-					listTenants(kv)
+					// fmt.Println(c.String("o"))
+					listTenants(kv, c)
 					return nil
 				},
 			},
@@ -329,7 +338,7 @@ func purgeTenants(kv *api.KV) error {
 	return nil
 }
 
-func listTenants(kv *api.KV) {
+func listTenants(kv *api.KV, c *cli.Context) {
 	keys, _, err := kv.Keys("tenants/", "/", &api.QueryOptions{})
 	// kvPairs, _, err := kv.List("tenants/", &api.QueryOptions{})
 	if err != nil {
@@ -337,17 +346,42 @@ func listTenants(kv *api.KV) {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 5, ' ', tabwriter.AlignRight)
-	fmt.Fprintln(w, "UID\t\tCName\t\tURL")
-	for _, v := range keys {
-		uuid, _, err := kv.Get(v+"uuid", nil)
-		if err != nil {
-			panic(err)
+
+	if c.String("o") == "uuid" {
+		// fmt.Fprintln(w, "UUID")
+		for _, v := range keys {
+			uuid, _, err := kv.Get(v+"uuid", nil)
+			if err != nil {
+				panic(err)
+			}
+			fmt.Fprintf(w, "%s\n", uuid.Value)
 		}
-		cname, _, err := kv.Get(v+"cname", nil)
-		if err != nil {
-			panic(err)
+	}
+
+	if c.String("o") == "cname" {
+		// fmt.Fprintln(w, "CName")
+		for _, v := range keys {
+			cname, _, err := kv.Get(v+"cname", nil)
+			if err != nil {
+				panic(err)
+			}
+			fmt.Fprintf(w, "%s\n", cname.Value)
 		}
-		fmt.Fprintf(w, "%s\t\t%s\t\t%s\n", uuid.Value, cname.Value, fmt.Sprintf("http://%s.jdwl.in", cname.Value))
+	}
+
+	if c.String("o") == "" {
+		fmt.Fprintln(w, "UUID\t\tCName\t\tURL")
+		for _, v := range keys {
+			uuid, _, err := kv.Get(v+"uuid", nil)
+			if err != nil {
+				panic(err)
+			}
+			cname, _, err := kv.Get(v+"cname", nil)
+			if err != nil {
+				panic(err)
+			}
+			fmt.Fprintf(w, "%s\t\t%s\t\t%s\n", uuid.Value, cname.Value, fmt.Sprintf("http://%s.jdwl.in", cname.Value))
+		}
 	}
 	w.Flush()
 }
