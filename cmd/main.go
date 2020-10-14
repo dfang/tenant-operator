@@ -63,11 +63,6 @@ func main() {
 		},
 		Flags: []cli.Flag{
 			&cli.StringFlag{
-				Name:  "lang, l",
-				Value: "english",
-				Usage: "Language for the greeting",
-			},
-			&cli.StringFlag{
 				Name:  "config, c",
 				Usage: "Load configuration from `FILE`",
 			},
@@ -132,6 +127,30 @@ func main() {
 				},
 				Action: func(c *cli.Context) error {
 					updateTenant(kv, c.String("uuid"), c.String("cname"))
+					return nil
+				},
+			},
+			{
+				Name:    "scale",
+				Aliases: []string{"s"},
+				Usage:   "scale replicas of deployment for a tenant ",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:     "u",
+						Required: true,
+						Usage:    "uuid for tenant",
+					},
+					&cli.StringFlag{
+						Name:     "n",
+						Required: true,
+						Usage:    "replicas count",
+					},
+				},
+				Action: func(c *cli.Context) error {
+					if c.NArg() > 0 {
+						// deleteTenant(kv, c.Args().Get(0))
+					}
+					fmt.Println("scaling ....")
 					return nil
 				},
 			},
