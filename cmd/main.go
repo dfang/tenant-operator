@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 
 	"text/tabwriter"
 
@@ -147,10 +148,14 @@ func main() {
 					},
 				},
 				Action: func(c *cli.Context) error {
-					if c.NArg() > 0 {
-						// deleteTenant(kv, c.Args().Get(0))
-					}
-					fmt.Println("scaling ....")
+					// if c.NArg() > 0 {
+					// 	// deleteTenant(kv, c.Args().Get(0))
+					// }
+					// if c.String("u") == "" {
+					// 	cli.ShowSubcommandHelp(c)
+					// 	return nil
+					// }
+					scaleTenant(kv, c)
 					return nil
 				},
 			},
@@ -405,6 +410,37 @@ func listTenants(kv *api.KV, c *cli.Context) {
 	w.Flush()
 }
 
+func scaleTenant(kv *api.KV, c *cli.Context) {
+	if c.String("u") == "" {
+		cli.ShowSubcommandHelp(c)
+		return
+	}
+
+	var replicas int
+	uuid := c.String("u")
+	if c.String("n") == "" {
+		replicas = 0
+	} else {
+		i, err := strconv.Atoi(c.String("n"))
+		if err != nil {
+			panic(err)
+		}
+		replicas = i
+	}
+
+	prefix := "tenants/" + uuid + "/cname"
+	ns, _, err := kv.Get(prefix, nil)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	if c.String("u") != "" && c.String("n") != "" {
+		ns := string(ns.Value)
+		ScaleNamespace(ns, replicas)
+	}
+}
+
 // updateTenant cname
 func updateTenant(kv *api.KV, uuid, cname string) error {
 
@@ -435,15 +471,10 @@ func randomHex(n int) (string, error) {
 }
 
 func createNamespace(nsName string) error {
-	kubeconfig := filepath.Join(os.Getenv("HOME"), ".kube", "config")
-	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
-	if err != nil {
-		panic(err)
-	}
-	clientset, err := kubernetes.NewForConfig(config)
+	clientset := getClientSet()
 
 	// query namespace by name, if not exist, create it
-	_, err = clientset.CoreV1().Namespaces().Get(nsName, metav1.GetOptions{
+	_, err := clientset.CoreV1().Namespaces().Get(nsName, metav1.GetOptions{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: corev1.SchemeGroupVersion.String(), Kind: "Namespace",
 		},
@@ -467,14 +498,9 @@ func createNamespace(nsName string) error {
 }
 
 func deleteNamespace(nsName string) error {
-	kubeconfig := filepath.Join(os.Getenv("HOME"), ".kube", "config")
-	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
-	if err != nil {
-		panic(err)
-	}
-	clientset, err := kubernetes.NewForConfig(config)
+	clientset := getClientSet()
 
-	err = clientset.CoreV1().Namespaces().Delete(nsName, &metav1.DeleteOptions{
+	err := clientset.CoreV1().Namespaces().Delete(nsName, &metav1.DeleteOptions{
 		// TODO
 		// GracePeriodSeconds: &int64(0),
 		// PropagationPolicy:  &metav1.DeletionPropagation.DeletePropagationBackground,
@@ -485,4 +511,54 @@ func deleteNamespace(nsName string) error {
 	}
 
 	return nil
+}
+
+// ScaleNamespace scale replicas to n for deployments in a namespace
+func ScaleNamespace(ns string, replicas int) {
+	clientset := getClientSet()
+
+	options := metav1.ListOptions{
+		// LabelSelector: "app=<APPNAME>",
+	}
+
+	// list deployments
+	deployList, _ := clientset.AppsV1().Deployments(ns).List(options)
+	fmt.Println("list deployments")
+	for _, item := range (*deployList).Items {
+		fmt.Println(item.Name)
+		fmt.Println(item.Namespace)
+		fmt.Println(item.Status)
+	}
+
+	// scale replicas to zero for a given namespace
+	for _, item := range (*deployList).Items {
+		sc, err := clientset.AppsV1().
+			Deployments(item.Namespace).
+			GetScale(item.Name, metav1.GetOptions{})
+		if err != nil {
+			log.Fatal(err)
+		}
+		sc.Spec.Replicas = int32(replicas)
+
+		scale, err := clientset.AppsV1().
+			Deployments(item.Namespace).
+			UpdateScale(item.Name, sc)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("Set namespace %s replicas to %d\n", item.Name, scale.Spec.Replicas)
+	}
+}
+
+func getClientSet() *kubernetes.Clientset {
+	kubeconfig := filepath.Join(os.Getenv("HOME"), ".kube", "config")
+	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	if err != nil {
+		panic(err)
+	}
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		panic(err)
+	}
+	return clientset
 }
