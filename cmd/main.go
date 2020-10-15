@@ -101,6 +101,12 @@ func main() {
 						Name:  "uuid",
 						Usage: "uuid for tenant",
 					},
+					&cli.IntFlag{
+						Name:     "replicas",
+						Required: false,
+						Value:    1,
+						Usage:    "replicas for tenant",
+					},
 					&cli.BoolFlag{
 						Name:     "dry-run",
 						Required: false,
@@ -121,7 +127,7 @@ func main() {
 			{
 				Name:    "update",
 				Aliases: []string{"u"},
-				Usage:   "update a tenant cname",
+				Usage:   "update a tenant cname or replicas",
 				Flags: []cli.Flag{
 					&cli.StringFlag{
 						Name:     "cname",
@@ -133,9 +139,15 @@ func main() {
 						Required: true,
 						Usage:    "uuid for tenant",
 					},
+					&cli.IntFlag{
+						Name:     "replicas",
+						Required: false,
+						Value:    1,
+						Usage:    "replicas for tenant",
+					},
 				},
 				Action: func(c *cli.Context) error {
-					updateTenant(kv, c.String("uuid"), c.String("cname"))
+					updateTenant(kv, c)
 					return nil
 				},
 			},
@@ -212,6 +224,8 @@ func addTenant(kv *api.KV, c *cli.Context) error {
 	var tenantKey string
 	var cnameV string
 	var dryRun bool
+	var replicas int
+	replicas = c.Int("replicas")
 
 	if c.Bool("dry-run") {
 		dryRun = c.Bool("dry-run")
@@ -234,6 +248,7 @@ func addTenant(kv *api.KV, c *cli.Context) error {
 
 	uuidKey := "tenants/" + tenantKey + "/uuid"
 	cnameKey := "tenants/" + tenantKey + "/cname"
+	replicasKey := "tenants/" + tenantKey + "/replicas"
 
 	// PUT a new KV pair
 	p := &api.KVPair{Key: uuidKey, Value: []byte(tenantKey)}
@@ -246,6 +261,14 @@ func addTenant(kv *api.KV, c *cli.Context) error {
 	// PUT a new KV pair
 	p1 := &api.KVPair{Key: cnameKey, Value: []byte(cnameV)}
 	_, err = kv.Put(p1, nil)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	// PUT a new KV pair
+	p2 := &api.KVPair{Key: replicasKey, Value: []byte(strconv.Itoa(c.Int("replicas")))}
+	_, err = kv.Put(p2, nil)
 	if err != nil {
 		fmt.Println(err)
 		return err
@@ -311,7 +334,7 @@ func addTenant(kv *api.KV, c *cli.Context) error {
 	// 	os.Exit(1)
 	// }
 
-	fmt.Printf("Created tenant, uuid: %s, cname: %s\n", tenantKey, cnameV)
+	fmt.Printf("Created tenant, uuid: %s, cname: %s, replicas: %d\n", tenantKey, cnameV, replicas)
 	err = cl.Create(context.Background(), &t)
 	if err != nil {
 		fmt.Println("failed to create tenant")
@@ -422,7 +445,7 @@ func listTenants(kv *api.KV, c *cli.Context) {
 	}
 
 	if c.String("o") == "" {
-		fmt.Fprintln(w, "UUID\t\tCName\t\tURL")
+		fmt.Fprintln(w, "UUID\t\tCName\t\tURL\t\tStatus")
 		for _, v := range keys {
 			uuid, _, err := kv.Get(v+"uuid", nil)
 			if err != nil {
@@ -432,7 +455,7 @@ func listTenants(kv *api.KV, c *cli.Context) {
 			if err != nil {
 				panic(err)
 			}
-			fmt.Fprintf(w, "%s\t\t%s\t\t%s\n", uuid.Value, cname.Value, fmt.Sprintf("http://%s.jdwl.in", cname.Value))
+			fmt.Fprintf(w, "%s\t\t%s\t\t%s\t\t%s\n", uuid.Value, cname.Value, fmt.Sprintf("http://%s.jdwl.in", cname.Value), "Active")
 		}
 	}
 	w.Flush()
@@ -470,18 +493,30 @@ func scaleTenant(kv *api.KV, c *cli.Context) {
 }
 
 // updateTenant cname
-func updateTenant(kv *api.KV, uuid, cname string) error {
-
+func updateTenant(kv *api.KV, c *cli.Context) error {
+	var uuid, cname string
+	var replicas int
 	// uuidKey := "tenants/" + uuid + "/uuid"
 	// uuidPair, _, err := kv.Get(uuidKey, nil)
 	// if err != nil {
 	// 	fmt.Println(err)
 	// 	return err
 	// }
+	uuid = c.String("uuid")
+	cname = c.String("cname")
+	replicas = c.Int("replicas")
 
 	// PUT a KV pair
 	p1 := &api.KVPair{Key: "tenants/" + uuid + "/cname", Value: []byte(cname)}
 	_, err := kv.Put(p1, nil)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	// PUT a KV pair
+	p2 := &api.KVPair{Key: "tenants/" + uuid + "/replicas", Value: []byte(strconv.Itoa(replicas))}
+	_, err = kv.Put(p2, nil)
 	if err != nil {
 		fmt.Println(err)
 		return err
