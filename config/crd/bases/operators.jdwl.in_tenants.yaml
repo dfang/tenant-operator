@@ -50,7 +50,7 @@ spec:
               cname:
                 type: string
               replicas:
-                default: 1
+                description: TODO https://github.com/kubernetes-sigs/controller-runtime/issues/1218
                 format: int32
                 type: integer
               uuid:

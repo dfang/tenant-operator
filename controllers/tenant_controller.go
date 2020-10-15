@@ -60,9 +60,11 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	log.Info("tenant", "replicas count: ", tenant.Spec.Replicas)
+
 	// if replicas = 0, set namespace to sleep mode
 	// if tenant.Spec.Replicas == 0 {
-	ScaleNamespace(tenant.Namespace, int(tenant.Spec.Replicas))
+	_ = r.ScaleNamespace(tenant.Namespace, int(tenant.Spec.Replicas))
 	// return ctrl.Result{}, nil
 	// }
 
@@ -221,9 +223,8 @@ func (r *TenantReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func ScaleNamespace(ns string, replicas int) {
+func (r *TenantReconciler) ScaleNamespace(ns string, replicas int) error {
 	clientset := getClientSet()
-
 	options := metav1.ListOptions{
 		// LabelSelector: "app=<APPNAME>",
 	}
@@ -251,10 +252,14 @@ func ScaleNamespace(ns string, replicas int) {
 			Deployments(item.Namespace).
 			UpdateScale(item.Name, sc)
 		if err != nil {
-			log.Fatal(err)
+			// log.Fatal(err)
+			fmt.Println("errrrrr")
+			fmt.Println(err)
+			return err
 		}
 		fmt.Printf("Set namespace %s replicas to %d\n", item.Name, scale.Spec.Replicas)
 	}
+	return nil
 }
 
 func getClientSet() *kubernetes.Clientset {

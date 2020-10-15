@@ -30,7 +30,8 @@ type TenantSpec struct {
 	UUID  string `json:"uuid,omitempty"`
 	CName string `json:"cname,omitempty"`
 
-	// +kubebuilder:default=1
+	// TODO
+	// https://github.com/kubernetes-sigs/controller-runtime/issues/1218
 	Replicas int32 `json:"replicas,omitempty"`
 }
 
