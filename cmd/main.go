@@ -22,13 +22,12 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/serializer/json"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
-
-	"k8s.io/apimachinery/pkg/runtime/serializer/json"
 )
 
 var (
@@ -55,7 +54,7 @@ func main() {
 	kv := client.KV()
 
 	app := &cli.App{
-		Name:  "boom",
+		Name:  "tenant",
 		Usage: "make an explosive entrance",
 		Action: func(c *cli.Context) error {
 			// fmt.Println("boom! I say!")
@@ -154,7 +153,7 @@ func main() {
 			{
 				Name:    "scale",
 				Aliases: []string{"s"},
-				Usage:   "scale replicas of deployment for a tenant ",
+				Usage:   "scale replicas of deployment for a tenant by `uuid`",
 				Flags: []cli.Flag{
 					&cli.StringFlag{
 						Name:     "u",
@@ -180,13 +179,31 @@ func main() {
 				},
 			},
 			{
+				Name:    "sleep",
+				Aliases: []string{"sleep"},
+				Usage:   "sleep a tenant by `uuid`",
+				Flags:   []cli.Flag{},
+				Action: func(c *cli.Context) error {
+					sleepTenant(kv, c)
+					return nil
+				},
+			},
+			{
+				Name:    "wakeup",
+				Aliases: []string{"wakeup"},
+				Usage:   "wakeup a tenant by `uuid`",
+				Flags:   []cli.Flag{},
+				Action: func(c *cli.Context) error {
+					wakeupTenant(kv, c)
+					return nil
+				},
+			},
+			{
 				Name:    "delete",
 				Aliases: []string{"d"},
-				Usage:   "delete a tenant",
+				Usage:   "delete a tenant by `uuid`",
 				Action: func(c *cli.Context) error {
-					if c.NArg() > 0 {
-						deleteTenant(kv, c.Args().Get(0))
-					}
+					deleteTenant(kv, c)
 					return nil
 				},
 			},
@@ -299,6 +316,7 @@ func addTenant(kv *api.KV, c *cli.Context) error {
 		return nil
 	}
 
+	// client from controller runtime
 	cl, err := client.New(config.GetConfigOrDie(), client.Options{})
 	if err != nil {
 		fmt.Println("failed to create client")
@@ -327,11 +345,15 @@ func addTenant(kv *api.KV, c *cli.Context) error {
 	return nil
 }
 
-func deleteTenant(kv *api.KV, uuid string) error {
+func deleteTenant(kv *api.KV, c *cli.Context) error {
 	// delete tenant namespace
 	// remove key from consul
-	// 03a90b115da101169870
+	if c.NArg() == 0 {
+		cli.ShowSubcommandHelp(c)
+		return nil
+	}
 
+	uuid := c.Args().Get(0)
 	prefix := "tenants/" + uuid + "/cname"
 	cname, _, err := kv.Get(prefix, nil)
 	if err != nil {
@@ -342,6 +364,7 @@ func deleteTenant(kv *api.KV, uuid string) error {
 		fmt.Printf("tenant %s not exist\n", uuid)
 		return nil
 	}
+
 	deleteNamespace(string(cname.Value))
 
 	_, err = kv.DeleteTree("tenants/"+uuid+"/", nil)
@@ -437,7 +460,7 @@ func listTenants(kv *api.KV, c *cli.Context) {
 			if err != nil {
 				panic(err)
 			}
-			fmt.Fprintf(w, "%s\t\t%s\t\t%s\t\t%s\n", uuid.Value, cname.Value, fmt.Sprintf("http://%s.jdwl.in", cname.Value), "Active")
+			fmt.Fprintf(w, "%s\t\t%s\t\t%s\t\t%s\n", uuid.Value, cname.Value, fmt.Sprintf("http://%s.jdwl.in", cname.Value), "?")
 		}
 	}
 	w.Flush()
@@ -474,7 +497,96 @@ func scaleTenant(kv *api.KV, c *cli.Context) {
 	}
 }
 
-// updateTenant cname
+func sleepTenant(kv *api.KV, c *cli.Context) {
+	if c.NArg() == 0 {
+		cli.ShowSubcommandHelp(c)
+		return
+	}
+
+	fmt.Println("sleep tenant", c.Args().Get(0))
+
+	uuid := c.Args().Get(0)
+	prefix := "tenants/" + uuid + "/cname"
+	ns, _, err := kv.Get(prefix, nil)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	// client from controller runtime
+	cl, err := client.New(config.GetConfigOrDie(), client.Options{})
+	if err != nil {
+		fmt.Println("failed to create client")
+		os.Exit(1)
+	}
+
+	t := &operatorsv1alpha1.Tenant{}
+	err = cl.Get(context.Background(), client.ObjectKey{
+		Namespace: string(ns.Value),
+		Name:      string(ns.Value),
+	}, t)
+	if err != nil {
+		fmt.Println("failed to get tenant")
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	t.Spec.Replicas = int32(0)
+
+	err = cl.Update(context.Background(), t)
+	if err != nil {
+		fmt.Println("failed to update tenant")
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+}
+
+func wakeupTenant(kv *api.KV, c *cli.Context) {
+	if c.NArg() == 0 {
+		cli.ShowSubcommandHelp(c)
+		return
+	}
+
+	fmt.Println("wakeup tenant", c.Args().Get(0))
+
+	uuid := c.Args().Get(0)
+	prefix := "tenants/" + uuid + "/cname"
+	ns, _, err := kv.Get(prefix, nil)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	// client from controller runtime
+	cl, err := client.New(config.GetConfigOrDie(), client.Options{})
+	if err != nil {
+		fmt.Println("failed to create client")
+		os.Exit(1)
+	}
+
+	t := &operatorsv1alpha1.Tenant{}
+	err = cl.Get(context.Background(), client.ObjectKey{
+		Namespace: string(ns.Value),
+		Name:      string(ns.Value),
+	}, t)
+	if err != nil {
+		fmt.Println("failed to get tenant")
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	t.Spec.Replicas = int32(1)
+
+	err = cl.Update(context.Background(), t)
+	if err != nil {
+		fmt.Println("failed to update tenant")
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+}
+
 func updateTenant(kv *api.KV, c *cli.Context) error {
 	uuid := c.String("uuid")
 	cname := c.String("cname")
@@ -532,7 +644,7 @@ func deleteNamespace(nsName string) error {
 	clientset := getClientSet()
 
 	err := clientset.CoreV1().Namespaces().Delete(nsName, &metav1.DeleteOptions{
-		// TODO
+		// Background
 		// GracePeriodSeconds: &int64(0),
 		// PropagationPolicy:  &metav1.DeletionPropagation.DeletePropagationBackground,
 	})
@@ -554,12 +666,12 @@ func ScaleNamespace(ns string, replicas int) {
 
 	// list deployments
 	deployList, _ := clientset.AppsV1().Deployments(ns).List(options)
-	fmt.Println("list deployments")
-	for _, item := range (*deployList).Items {
-		fmt.Println(item.Name)
-		fmt.Println(item.Namespace)
-		fmt.Println(item.Status)
-	}
+	// fmt.Println("list deployments")
+	// for _, item := range (*deployList).Items {
+	// 	fmt.Println(item.Name)
+	// 	fmt.Println(item.Namespace)
+	// 	fmt.Println(item.Status)
+	// }
 
 	// scale replicas to zero for a given namespace
 	for _, item := range (*deployList).Items {
