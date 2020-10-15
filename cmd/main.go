@@ -27,6 +27,8 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
+
+	"k8s.io/apimachinery/pkg/runtime/serializer/json"
 )
 
 var (
@@ -99,6 +101,12 @@ func main() {
 						Name:  "uuid",
 						Usage: "uuid for tenant",
 					},
+					&cli.BoolFlag{
+						Name:     "dry-run",
+						Required: false,
+						Value:    false,
+						Usage:    "dry-run (ouput yaml to os.stdout)",
+					},
 				},
 				Action: func(c *cli.Context) error {
 					// if c.NArg() > 0 {
@@ -106,7 +114,7 @@ func main() {
 					// fmt.Println(c.Args())
 					// fmt.Println(c.String("cname"))
 					// fmt.Println(c.String("uuid"))
-					addTenant(kv, c.String("uuid"), c.String("cname"))
+					addTenant(kv, c)
 					return nil
 				},
 			},
@@ -200,23 +208,28 @@ func main() {
 	// fmt.Printf("KV: %v %s\n", pair.Key, pair.Value)
 }
 
-func addTenant(kv *api.KV, uuid, cname string) error {
+func addTenant(kv *api.KV, c *cli.Context) error {
 	var tenantKey string
 	var cnameV string
+	var dryRun bool
 
-	if uuid == "" {
-		tenantKey, _ = randomHex(10)
-	} else {
-		tenantKey = uuid
+	if c.Bool("dry-run") {
+		dryRun = c.Bool("dry-run")
 	}
 
-	if cname == "" {
+	if c.String("uuid") == "" {
+		tenantKey, _ = randomHex(10)
+	} else {
+		tenantKey = c.String("uuid")
+	}
+
+	if c.String("cname") == "" {
 		haikunator := haikunator.New()
 		haikunator.TokenLength = 9
 		haikunator.TokenHex = true
 		cnameV = haikunator.Haikunate()
 	} else {
-		cnameV = cname
+		cnameV = c.String("cname")
 	}
 
 	uuidKey := "tenants/" + tenantKey + "/uuid"
@@ -252,7 +265,7 @@ func addTenant(kv *api.KV, uuid, cname string) error {
 		},
 	}
 
-	tn := operatorsv1alpha1.Tenant{
+	t := operatorsv1alpha1.Tenant{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: appsv1.SchemeGroupVersion.String(), Kind: "Tenant",
 		},
@@ -261,9 +274,24 @@ func addTenant(kv *api.KV, uuid, cname string) error {
 			Namespace: string(p1.Value),
 		},
 		Spec: operatorsv1alpha1.TenantSpec{
-			UUID:  string(p.Value),
-			CName: string(p1.Value),
+			UUID:     string(p.Value),
+			CName:    string(p1.Value),
+			Replicas: 1,
 		},
+	}
+
+	if dryRun {
+		// https://miminar.fedorapeople.org/_preview/openshift-enterprise/registry-redeploy/go_client/serializing_and_deserializing.html
+		// Create a YAML serializer.  JSON is a subset of YAML, so is supported too.
+		s := json.NewYAMLSerializer(json.DefaultMetaFactory, clientgoscheme.Scheme,
+			clientgoscheme.Scheme)
+
+		// Encode the object to YAML.
+		err = s.Encode(&t, os.Stdout)
+		if err != nil {
+			panic(err)
+		}
+		return nil
 	}
 
 	cl, err := client.New(config.GetConfigOrDie(), client.Options{})
@@ -284,7 +312,7 @@ func addTenant(kv *api.KV, uuid, cname string) error {
 	// }
 
 	fmt.Printf("Created tenant, uuid: %s, cname: %s\n", tenantKey, cnameV)
-	err = cl.Create(context.Background(), &tn)
+	err = cl.Create(context.Background(), &t)
 	if err != nil {
 		fmt.Println("failed to create tenant")
 		fmt.Println(err)
