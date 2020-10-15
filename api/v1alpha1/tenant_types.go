@@ -29,6 +29,9 @@ type TenantSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 	UUID  string `json:"uuid,omitempty"`
 	CName string `json:"cname,omitempty"`
+
+	// +kubebuilder:default=1
+	Replicas int32 `json:"replicas,omitempty"`
 }
 
 // TenantStatus defines the observed state of Tenant
@@ -38,6 +41,11 @@ type TenantStatus struct {
 	CName string `json:"cname,omitempty"`
 	URL   string `json:"url,omitempty"`
 	// Custom Domain
+
+	Replicas int32 `json:"replicas,omitempty"`
+
+	// Active or Inactive (replicas = 0)
+	Status string `json:"status,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -45,6 +53,7 @@ type TenantStatus struct {
 // +kubebuilder:printcolumn:name="UUID",JSONPath=".spec.uuid",type="string",description="UUID of the tenant"
 // +kubebuilder:printcolumn:name="CName",JSONPath=".spec.cname",type="string",description="CName of the tenant"
 // +kubebuilder:printcolumn:name="URL",JSONPath=".status.url",type="string"
+// +kubebuilder:printcolumn:name="Status",JSONPath=".status.status",type="string"
 
 // Tenant is the Schema for the tenants API
 type Tenant struct {

@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -59,20 +60,15 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	// goal: get namespace status, if it's been terminating, just return, no more reconciling
-	// TODO
-	// make this controller run in cluster and out of cluster of cluster (make run)
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		kubeconfig := filepath.Join(os.Getenv("HOME"), ".kube", "config")
-		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
-		if err != nil {
-			panic(err)
-		}
-	}
-	clientset, err := kubernetes.NewForConfig(config)
+	// if replicas = 0, set namespace to sleep mode
+	// if tenant.Spec.Replicas == 0 {
+	ScaleNamespace(tenant.Namespace, int(tenant.Spec.Replicas))
+	// return ctrl.Result{}, nil
+	// }
 
-	// query namespace by name, if not exist, create it
+	// goal: get namespace status, if it's been terminating, just return, no more reconciling
+
+	clientset := getClientSet()
 	ns, err := clientset.CoreV1().Namespaces().Get(tenant.Namespace, metav1.GetOptions{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: corev1.SchemeGroupVersion.String(), Kind: "Namespace",
@@ -178,6 +174,14 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	// log.Info(tenant.Spec.CName)
 
 	tenant.Status.URL = fmt.Sprintf("http://%s.jdwl.in", tenant.Spec.CName)
+	tenant.Status.Replicas = tenant.Spec.Replicas
+	tenant.Status.CName = tenant.Spec.CName
+
+	tenant.Status.Status = "Active"
+	if tenant.Status.Replicas == 0 {
+		tenant.Status.Status = "Inactive"
+	}
+
 	err = r.Status().Update(ctx, &tenant)
 	if err != nil {
 		fmt.Println(err)
@@ -215,4 +219,58 @@ func (r *TenantReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		//     ToRequests: handler.ToRequestsFunc(r.booksUsingRedis),
 		//   }).
 		Complete(r)
+}
+
+func ScaleNamespace(ns string, replicas int) {
+	clientset := getClientSet()
+
+	options := metav1.ListOptions{
+		// LabelSelector: "app=<APPNAME>",
+	}
+
+	// list deployments
+	deployList, _ := clientset.AppsV1().Deployments(ns).List(options)
+	fmt.Println("list deployments")
+	for _, item := range (*deployList).Items {
+		fmt.Println(item.Name)
+		fmt.Println(item.Namespace)
+		fmt.Println(item.Status)
+	}
+
+	// scale replicas to zero for a given namespace
+	for _, item := range (*deployList).Items {
+		sc, err := clientset.AppsV1().
+			Deployments(item.Namespace).
+			GetScale(item.Name, metav1.GetOptions{})
+		if err != nil {
+			log.Fatal(err)
+		}
+		sc.Spec.Replicas = int32(replicas)
+
+		scale, err := clientset.AppsV1().
+			Deployments(item.Namespace).
+			UpdateScale(item.Name, sc)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("Set namespace %s replicas to %d\n", item.Name, scale.Spec.Replicas)
+	}
+}
+
+func getClientSet() *kubernetes.Clientset {
+	// TODO
+	// make this controller run in cluster and out of cluster of cluster (make run)
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		kubeconfig := filepath.Join(os.Getenv("HOME"), ".kube", "config")
+		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
+		if err != nil {
+			panic(err)
+		}
+	}
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		panic(err)
+	}
+	return clientset
 }

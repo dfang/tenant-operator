@@ -28,6 +28,9 @@ spec:
     - jsonPath: .status.url
       name: URL
       type: string
+    - jsonPath: .status.status
+      name: Status
+      type: string
     name: v1alpha1
     schema:
       openAPIV3Schema:
@@ -46,6 +49,10 @@ spec:
             properties:
               cname:
                 type: string
+              replicas:
+                default: 1
+                format: int32
+                type: integer
               uuid:
                 description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster Important: Run "make" to regenerate code after modifying this file'
                 type: string
@@ -55,6 +62,12 @@ spec:
             properties:
               cname:
                 description: 'INSERT ADDITIONAL STATUS FIELD - define observed state of cluster Important: Run "make" to regenerate code after modifying this file'
+                type: string
+              replicas:
+                format: int32
+                type: integer
+              status:
+                description: Active or Inactive (replicas = 0)
                 type: string
               url:
                 type: string
