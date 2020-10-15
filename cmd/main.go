@@ -221,20 +221,13 @@ func main() {
 }
 
 func addTenant(kv *api.KV, c *cli.Context) error {
-	var tenantKey string
-	var cnameV string
-	var dryRun bool
-	var replicas int
-	replicas = c.Int("replicas")
+	replicas := c.Int("replicas")
+	dryRun := c.Bool("dry-run")
+	tenantKey := c.String("uuid")
+	cnameV := c.String("cname")
 
-	if c.Bool("dry-run") {
-		dryRun = c.Bool("dry-run")
-	}
-
-	if c.String("uuid") == "" {
+	if tenantKey == "" {
 		tenantKey, _ = randomHex(10)
-	} else {
-		tenantKey = c.String("uuid")
 	}
 
 	if c.String("cname") == "" {
@@ -242,35 +235,24 @@ func addTenant(kv *api.KV, c *cli.Context) error {
 		haikunator.TokenLength = 9
 		haikunator.TokenHex = true
 		cnameV = haikunator.Haikunate()
-	} else {
-		cnameV = c.String("cname")
 	}
 
 	uuidKey := "tenants/" + tenantKey + "/uuid"
 	cnameKey := "tenants/" + tenantKey + "/cname"
 	replicasKey := "tenants/" + tenantKey + "/replicas"
 
-	// PUT a new KV pair
-	p := &api.KVPair{Key: uuidKey, Value: []byte(tenantKey)}
-	_, err := kv.Put(p, nil)
-	if err != nil {
-		fmt.Println(err)
+	// PUT a KV pair
+	if err := putKey(kv, uuidKey, tenantKey); err != nil {
+		return err
+	}
+
+	// PUT a KV pair
+	if err := putKey(kv, cnameKey, cnameV); err != nil {
 		return err
 	}
 
 	// PUT a new KV pair
-	p1 := &api.KVPair{Key: cnameKey, Value: []byte(cnameV)}
-	_, err = kv.Put(p1, nil)
-	if err != nil {
-		fmt.Println(err)
-		return err
-	}
-
-	// PUT a new KV pair
-	p2 := &api.KVPair{Key: replicasKey, Value: []byte(strconv.Itoa(c.Int("replicas")))}
-	_, err = kv.Put(p2, nil)
-	if err != nil {
-		fmt.Println(err)
+	if err := putKey(kv, replicasKey, strconv.Itoa(c.Int("replicas"))); err != nil {
 		return err
 	}
 
@@ -279,12 +261,12 @@ func addTenant(kv *api.KV, c *cli.Context) error {
 			APIVersion: appsv1.SchemeGroupVersion.String(), Kind: "TenantNamespace",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      string(p1.Value),
+			Name:      cnameV,
 			Namespace: "default",
 			Labels:    map[string]string{"namespace-owner": "tenant"},
 		},
 		Spec: operatorsv1alpha1.TenantNamespaceSpec{
-			Name: string(p.Value),
+			Name: tenantKey,
 		},
 	}
 
@@ -293,13 +275,13 @@ func addTenant(kv *api.KV, c *cli.Context) error {
 			APIVersion: appsv1.SchemeGroupVersion.String(), Kind: "Tenant",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      string(p1.Value),
-			Namespace: string(p1.Value),
+			Name:      cnameV,
+			Namespace: cnameV,
 		},
 		Spec: operatorsv1alpha1.TenantSpec{
-			UUID:     string(p.Value),
-			CName:    string(p1.Value),
-			Replicas: 1,
+			UUID:     tenantKey,
+			CName:    cnameV,
+			Replicas: int32(replicas),
 		},
 	}
 
@@ -310,9 +292,9 @@ func addTenant(kv *api.KV, c *cli.Context) error {
 			clientgoscheme.Scheme)
 
 		// Encode the object to YAML.
-		err = s.Encode(&t, os.Stdout)
+		err := s.Encode(&t, os.Stdout)
 		if err != nil {
-			panic(err)
+			fmt.Println(err)
 		}
 		return nil
 	}
@@ -324,7 +306,7 @@ func addTenant(kv *api.KV, c *cli.Context) error {
 	}
 
 	// fmt.Println("Create namespace")
-	createNamespace(string(p1.Value))
+	createNamespace(cnameV)
 
 	// fmt.Println("Create tenant namespace")
 	// err = cl.Create(context.Background(), &ns)
@@ -494,31 +476,17 @@ func scaleTenant(kv *api.KV, c *cli.Context) {
 
 // updateTenant cname
 func updateTenant(kv *api.KV, c *cli.Context) error {
-	var uuid, cname string
-	var replicas int
-	// uuidKey := "tenants/" + uuid + "/uuid"
-	// uuidPair, _, err := kv.Get(uuidKey, nil)
-	// if err != nil {
-	// 	fmt.Println(err)
-	// 	return err
-	// }
-	uuid = c.String("uuid")
-	cname = c.String("cname")
-	replicas = c.Int("replicas")
+	uuid := c.String("uuid")
+	cname := c.String("cname")
+	replicas := c.Int("replicas")
 
 	// PUT a KV pair
-	p1 := &api.KVPair{Key: "tenants/" + uuid + "/cname", Value: []byte(cname)}
-	_, err := kv.Put(p1, nil)
-	if err != nil {
-		fmt.Println(err)
+	if err := putKey(kv, "tenants/"+uuid+"/cname", cname); err != nil {
 		return err
 	}
 
 	// PUT a KV pair
-	p2 := &api.KVPair{Key: "tenants/" + uuid + "/replicas", Value: []byte(strconv.Itoa(replicas))}
-	_, err = kv.Put(p2, nil)
-	if err != nil {
-		fmt.Println(err)
+	if err := putKey(kv, "tenants/"+uuid+"/replicas", strconv.Itoa(replicas)); err != nil {
 		return err
 	}
 
@@ -624,4 +592,15 @@ func getClientSet() *kubernetes.Clientset {
 		panic(err)
 	}
 	return clientset
+}
+
+func putKey(kv *api.KV, k, v string) error {
+	// p2 := &api.KVPair{Key: "tenants/" + uuid + "/replicas", Value: []byte(strconv.Itoa(replicas))}
+	p2 := &api.KVPair{Key: k, Value: []byte(v)}
+	_, err := kv.Put(p2, nil)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+	return nil
 }
