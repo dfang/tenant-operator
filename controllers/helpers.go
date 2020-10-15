@@ -200,11 +200,12 @@ func doSSA(ctx context.Context, cfg *rest.Config, yamlContent string, tenant ope
 	}
 
 	// set owner references
-	fmt.Println("set owner reference")
-	fmt.Println("UID: ", tenant.UID)
-	fmt.Println("Name: ", tenant.Spec.CName)
-	fmt.Println("Kind: ", "Tenant")
-	fmt.Println("APIVersion: ", "operators.jdwl.in/v1alpha1")
+	// log.DEBUG("Set owner reference")
+	// fmt.Println("set owner reference")
+	// fmt.Println("UID: ", tenant.UID)
+	// fmt.Println("Name: ", tenant.Spec.CName)
+	// fmt.Println("Kind: ", "Tenant")
+	// fmt.Println("APIVersion: ", "operators.jdwl.in/v1alpha1")
 
 	obj.SetOwnerReferences([]metav1.OwnerReference{
 		metav1.OwnerReference{
@@ -221,7 +222,7 @@ func doSSA(ctx context.Context, cfg *rest.Config, yamlContent string, tenant ope
 		return nil, err
 	}
 
-	fmt.Println(string(data))
+	// fmt.Println(string(data))
 
 	// 7. Create or Update the object with SSA
 	//     types.ApplyPatchType indicates SSA.
@@ -229,6 +230,9 @@ func doSSA(ctx context.Context, cfg *rest.Config, yamlContent string, tenant ope
 	unstructuredObj, err := dr.Patch(obj.GetName(), types.ApplyPatchType, data, metav1.PatchOptions{
 		FieldManager: "tenant-controller",
 	})
+	if err != nil {
+		fmt.Println(err)
+	}
 
 	return unstructuredObj, err
 }

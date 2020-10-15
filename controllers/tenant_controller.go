@@ -31,6 +31,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -38,8 +39,9 @@ import (
 // TenantReconciler reconciles a Tenant object
 type TenantReconciler struct {
 	client.Client
-	Log    logr.Logger
-	Scheme *runtime.Scheme
+	Log      logr.Logger
+	Scheme   *runtime.Scheme
+	recorder record.EventRecorder
 }
 
 // +kubebuilder:rbac:groups=operators.jdwl.in,resources=tenants,verbs=get;list;watch;create;update;patch;delete
@@ -172,8 +174,8 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
-	log.Info(tenant.Spec.UUID)
-	log.Info(tenant.Spec.CName)
+	// log.Info(tenant.Spec.UUID)
+	// log.Info(tenant.Spec.CName)
 
 	tenant.Status.URL = fmt.Sprintf("http://%s.jdwl.in", tenant.Spec.CName)
 	err = r.Status().Update(ctx, &tenant)
@@ -181,6 +183,9 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		fmt.Println(err)
 		return ctrl.Result{}, err
 	}
+
+	// https://book-v1.book.kubebuilder.io/beyond_basics/creating_events.html
+	r.recorder.Event(&tenant, corev1.EventTypeNormal, "Reconciled", "Reconciled tenant")
 
 	log.Info("reconciled tenant")
 
@@ -197,6 +202,9 @@ func (r *TenantReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			}
 			return []string{uuid}
 		})
+
+	// add this line
+	r.recorder = mgr.GetEventRecorderFor("Tenant")
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&operatorsv1alpha1.Tenant{}).
