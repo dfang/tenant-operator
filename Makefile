@@ -88,3 +88,12 @@ endif
 
 
 pipeline: docker-build docker-push deploy
+
+# define make variable at rule execution time
+# https://stackoverflow.com/a/1909390/655621
+# tail logs from manager container
+logs:
+	$(eval POD := $(shell kubectl -n jdwl-operator-system get pod -o name))
+	@echo ${POD}
+	@echo $(POD)
+	kubectl -n jdwl-operator-system logs -f $(POD) -c manager
