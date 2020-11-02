@@ -74,14 +74,16 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "Tenant")
 		os.Exit(1)
 	}
-	if err = (&controllers.TenantNamespaceReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("TenantNamespace"),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "TenantNamespace")
-		os.Exit(1)
-	}
+
+	// if err = (&controllers.TenantNamespaceReconciler{
+	// 	Client: mgr.GetClient(),
+	// 	Log:    ctrl.Log.WithName("controllers").WithName("TenantNamespace"),
+	// 	Scheme: mgr.GetScheme(),
+	// }).SetupWithManager(mgr); err != nil {
+	// 	setupLog.Error(err, "unable to create controller", "controller", "TenantNamespace")
+	// 	os.Exit(1)
+	// }
+
 	// +kubebuilder:scaffold:builder
 
 	setupLog.Info("starting manager")
