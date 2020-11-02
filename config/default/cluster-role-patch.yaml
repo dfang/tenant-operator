@@ -1,0 +1,25 @@
+# JSONPATCH http://jsonpatch.com/
+# k get clusterrole jdwl-operator-manager-role -o json
+# this file add delete, update, create to manager-role verbs defined in rbac/role.yaml
+# for more, see comments in kustomization.yaml
+
+- op: add
+  path: /rules/0/verbs/0
+  value: create
+- op: add
+  path: /rules/0/verbs/0
+  value: update
+- op: add
+  path: /rules/0/verbs/0
+  value: delete
+
+
+- op: add
+  path: /rules/1/verbs/0
+  value: create
+- op: add
+  path: /rules/1/verbs/0
+  value: update
+- op: add
+  path: /rules/1/verbs/0
+  value: delete
