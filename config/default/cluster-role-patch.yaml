@@ -3,23 +3,121 @@
 # this file add delete, update, create to manager-role verbs defined in rbac/role.yaml
 # for more, see comments in kustomization.yaml
 
-- op: add
-  path: /rules/0/verbs/0
-  value: create
-- op: add
-  path: /rules/0/verbs/0
-  value: update
-- op: add
-  path: /rules/0/verbs/0
-  value: delete
+# - op: add
+#   path: /rules/0/verbs/0
+#   value: create
+# - op: add
+#   path: /rules/0/verbs/0
+#   value: update
+# - op: add
+#   path: /rules/0/verbs/0
+#   value: delete
 
 
-- op: add
-  path: /rules/1/verbs/0
-  value: create
-- op: add
-  path: /rules/1/verbs/0
-  value: update
-- op: add
-  path: /rules/1/verbs/0
-  value: delete
+# - op: add
+#   path: /rules/1/verbs/0
+#   value: create
+# - op: add
+#   path: /rules/1/verbs/0
+#   value: update
+# - op: add
+#   path: /rules/1/verbs/0
+#   value: delete
+
+# # add deployment/scale
+# - op: add
+#   path: /rules/1/
+#   value: { "apiGroups": [ "apps" ], "resources": [ "deployments/scale" ], "verbs": [ "get", "list", "patch", "watch", "create", "delete", "update" ] } 
+
+
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: manager-role
+rules:
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  - deployments/scale
+  verbs:
+  - get
+  - list
+  - patch
+  - watch
+  - create
+  - delete
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - events
+  - services
+  verbs:
+  - get
+  - list
+  - patch
+  - watch
+  - create
+  - delete
+  - update
+
+# Permission for reconcile IngressRoute
+- apiGroups:
+  - traefik.containo.us
+  resources:
+  - ingressroutes
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+
+
+# CRD copied from rbac/roles.yaml
+- apiGroups:
+  - operators.jdwl.in
+  resources:
+  - tenantnamespaces
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - operators.jdwl.in
+  resources:
+  - tenantnamespaces/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - operators.jdwl.in
+  resources:
+  - tenants
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - operators.jdwl.in
+  resources:
+  - tenants/status
+  verbs:
+  - get
+  - patch
+  - update
