@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"text/template"
 
+	_ "github.com/markbates/pkger"
 	operatorsv1alpha1 "jdwl.in/operator/api/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -24,13 +25,14 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
 	"k8s.io/client-go/tools/clientcmd"
-
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 func (r *TenantReconciler) desiredDeployment(tenant operatorsv1alpha1.Tenant) (appsv1.Deployment, error) {
 	log := r.Log.WithValues("tenant", tenant.Namespace)
+
 	log.Info("reconciling deployment")
+
 	depl := appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{APIVersion: appsv1.SchemeGroupVersion.String(), Kind: "Deployment"},
 		ObjectMeta: metav1.ObjectMeta{
@@ -66,12 +68,16 @@ func (r *TenantReconciler) desiredDeployment(tenant operatorsv1alpha1.Tenant) (a
 		return depl, err
 	}
 
+	log.Info("reconciled deployment")
+
 	return depl, nil
 }
 
 func (r *TenantReconciler) desiredService(tenant operatorsv1alpha1.Tenant) (corev1.Service, error) {
 	log := r.Log.WithValues("tenant", tenant.Namespace)
+
 	log.Info("reconciling service")
+
 	svc := corev1.Service{
 		TypeMeta: metav1.TypeMeta{APIVersion: corev1.SchemeGroupVersion.String(), Kind: "Service"},
 		ObjectMeta: metav1.ObjectMeta{
@@ -92,6 +98,8 @@ func (r *TenantReconciler) desiredService(tenant operatorsv1alpha1.Tenant) (core
 		return svc, err
 	}
 
+	log.Info("reconciled service")
+
 	return svc, nil
 }
 
@@ -110,6 +118,7 @@ func (r *TenantReconciler) desiredIngressRoute(tenant operatorsv1alpha1.Tenant) 
 	}
 
 	log.Info("reconciling ingressRoute")
+
 	data := struct {
 		Name        string
 		Namespace   string
@@ -122,7 +131,36 @@ func (r *TenantReconciler) desiredIngressRoute(tenant operatorsv1alpha1.Tenant) 
 		Host:        fmt.Sprintf("%s.jdwl.in", tenant.Spec.CName),
 	}
 
-	tmpl, err := template.ParseFiles("controllers/templates/ingressRoute.yaml")
+	// if, err := pkger.Open("controllers/templates/ingressRoute.yaml")
+	// if err != nil {
+	// 	return err
+	// }
+	// defer f.Close()
+
+	// b, err := ioutil.ReadAll(f)
+	// if err != nil {
+	// 	return err
+	// }
+	b := `apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: {{ .Name }}
+  namespace: {{ .Namespace }}
+  labels:
+    owner: tenant
+spec:
+  entryPoints:
+    - web
+  routes:
+  - match: Host("{{ .Host }}")
+    kind: Rule
+    services:
+    - name: {{ .ServiceName }}
+      namespace: {{ .Namespace }}
+      port: 80
+`
+
+	tmpl, err := template.New("ingressRoute").Parse(string(b))
 	if err != nil {
 		panic(err)
 	}
@@ -155,6 +193,8 @@ func (r *TenantReconciler) desiredIngressRoute(tenant operatorsv1alpha1.Tenant) 
 	//   Controller:
 	//   Name:
 	// })
+
+	log.Info("reconciled ingressRoute")
 
 	return nil
 }

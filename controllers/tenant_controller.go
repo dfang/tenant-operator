@@ -62,6 +62,9 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	log.Info("tenant", "replicas count: ", tenant.Spec.Replicas)
 
+	// kubectl describe tenant
+	r.recorder.Event(&tenant, corev1.EventTypeNormal, "Reconciled", "Reconciling tenant start")
+
 	// if replicas = 0, set namespace to sleep mode
 	// if tenant.Spec.Replicas == 0 {
 	_ = r.ScaleNamespace(tenant.Namespace, int(tenant.Spec.Replicas))
@@ -156,6 +159,7 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	if err != nil {
 		return ctrl.Result{}, err
 	}
+	r.recorder.Event(&tenant, corev1.EventTypeNormal, "Reconciliation status changed", "Reconciling deployment finished")
 
 	svc, err := r.desiredService(tenant)
 	if err != nil {
@@ -165,12 +169,14 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	if err != nil {
 		return ctrl.Result{}, err
 	}
+	r.recorder.Event(&tenant, corev1.EventTypeNormal, "Reconciliation status changed", "Reconciling service finished")
 
 	// server side apply generated yaml
 	err = r.desiredIngressRoute(tenant)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
+	r.recorder.Event(&tenant, corev1.EventTypeNormal, "Reconciliation status changed", "Reconciling ingressRoute finished")
 
 	// log.Info(tenant.Spec.UUID)
 	// log.Info(tenant.Spec.CName)
@@ -187,11 +193,12 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	err = r.Status().Update(ctx, &tenant)
 	if err != nil {
 		fmt.Println(err)
+		r.recorder.Event(&tenant, corev1.EventTypeWarning, "Reconciliation status changed", "Reconciling tenant failed")
 		return ctrl.Result{}, err
 	}
 
 	// https://book-v1.book.kubebuilder.io/beyond_basics/creating_events.html
-	r.recorder.Event(&tenant, corev1.EventTypeNormal, "Reconciled", "Reconciled tenant")
+	r.recorder.Event(&tenant, corev1.EventTypeNormal, "Reconciliation status changed", "Reconciling tenant succeed")
 
 	log.Info("reconciled tenant")
 
