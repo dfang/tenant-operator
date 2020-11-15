@@ -3,6 +3,9 @@ name: CI to Docker hub
 on:
   push:
     branches: develop
+env:
+  SHORTSHA: $(git rev-parse ${{ github.sha }})
+
 
 jobs:
   main:
@@ -29,7 +32,7 @@ jobs:
           tags: |
             dfang/tenant-operator:latest
             dfang/tenant-operator:${{ github.sha }}
-            dfang/tenant-operator:$(git rev-parse --short HEAD)
+            dfang/tenant-operator:$SHORTSHA
       -
         name: Image digest
         run: echo ${{ steps.docker_build.outputs.digest }}
