@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log"
 
@@ -31,7 +32,16 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	_ "github.com/lib/pq"
 	"jdwl.in/operator/pkg/helper"
+)
+
+const (
+	host     = "localhost"
+	port     = 5432
+	user     = "postgres"
+	password = "^[Nd}6Ka_c,A0-ti}1l:iAQN"
+	dbname   = "tenants"
 )
 
 // TenantReconciler reconciles a Tenant object
@@ -56,6 +66,10 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	if err := r.Get(ctx, req.NamespacedName, &tenant); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+
+	log.Info("reconciling database and user")
+	createDB(tenant)
+	createUser(tenant)
 
 	log.Info("tenant", "replicas count: ", tenant.Spec.Replicas)
 
@@ -175,8 +189,14 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 	r.recorder.Event(&tenant, corev1.EventTypeNormal, "Reconciliation status changed", "Reconciling ingressRoute finished")
 
-	// log.Info(tenant.Spec.UUID)
-	// log.Info(tenant.Spec.CName)
+	log.Info(tenant.Spec.UUID)
+	log.Info(tenant.Spec.CName)
+
+	// server side apply generated yaml
+	err = r.desiredConfigmap(tenant)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
 
 	tenant.Status.URL = fmt.Sprintf("http://%s.jdwl.in", tenant.Spec.CName)
 	tenant.Status.Replicas = tenant.Spec.Replicas
@@ -200,6 +220,48 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	log.Info("reconciled tenant")
 
 	return ctrl.Result{}, nil
+}
+
+func createDB(tenant operatorsv1alpha1.Tenant) {
+	db := getDB()
+	defer db.Close()
+
+	_, err := db.Exec(fmt.Sprintf(`CREATE DATABASE "%s"`, tenant.Spec.CName))
+	if err != nil {
+		fmt.Println(err.Error())
+	} else {
+		fmt.Println("Successfully created database..")
+	}
+}
+
+func createUser(tenant operatorsv1alpha1.Tenant) {
+	db := getDB()
+	defer db.Close()
+
+	_, err := db.Exec(fmt.Sprintf(`CREATE USER "%s" WITH PASSWORD '%s';`, tenant.Spec.CName, "xxxxx"))
+	if err != nil {
+		fmt.Println(err.Error())
+	} else {
+		fmt.Println("Successfully created database..")
+	}
+}
+
+func getDB() *sql.DB {
+	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
+		host, port, user, password, dbname)
+	fmt.Println(psqlInfo)
+
+	db, err := sql.Open("postgres", psqlInfo)
+	if err != nil {
+		panic(err)
+	}
+
+	err = db.Ping()
+	if err != nil {
+		panic(err)
+	}
+
+	return db
 }
 
 func (r *TenantReconciler) ScaleNamespace(ns string, replicas int) error {

@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"text/template"
 
-	_ "github.com/markbates/pkger"
+	"github.com/markbates/pkger"
 	operatorsv1alpha1 "jdwl.in/operator/api/v1alpha1"
 	"jdwl.in/operator/pkg/helper"
 	appsv1 "k8s.io/api/apps/v1"
@@ -123,16 +124,6 @@ func (r *TenantReconciler) desiredIngressRoute(tenant operatorsv1alpha1.Tenant) 
 		Host:        fmt.Sprintf("%s.jdwl.in", tenant.Spec.CName),
 	}
 
-	// if, err := pkger.Open("controllers/templates/ingressRoute.yaml")
-	// if err != nil {
-	// 	return err
-	// }
-	// defer f.Close()
-
-	// b, err := ioutil.ReadAll(f)
-	// if err != nil {
-	// 	return err
-	// }
 	b := `apiVersion: traefik.containo.us/v1alpha1
 kind: IngressRoute
 metadata:
@@ -187,6 +178,60 @@ spec:
 	// })
 
 	log.Info("reconciled ingressRoute")
+
+	return nil
+}
+
+func (r *TenantReconciler) desiredConfigmap(tenant operatorsv1alpha1.Tenant) error {
+	log := r.Log.WithValues("tenant", tenant.Namespace)
+	log.Info("reconciling configmap")
+
+	// TODO
+	// make this controller run in cluster and out of cluster of cluster (make run)
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		kubeconfig := filepath.Join(os.Getenv("HOME"), ".kube", "config")
+		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	f, err := pkger.Open("/controllers/templates/env-config.yaml")
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	b, err := ioutil.ReadAll(f)
+	if err != nil {
+		return err
+	}
+
+	tmpl, err := template.New("configmap").Parse(string(b))
+	if err != nil {
+		panic(err)
+	}
+
+	data := struct {
+		Namespace string
+	}{
+		Namespace: tenant.Spec.CName,
+	}
+
+	buf := new(bytes.Buffer)
+	err = tmpl.Execute(buf, data)
+	if err != nil {
+		panic(err)
+	}
+
+	yamlContent := buf.String()
+	_, err = helper.DoSSA(context.Background(), config, yamlContent)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	log.Info("reconciled configmap")
 
 	return nil
 }

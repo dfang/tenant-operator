@@ -9,6 +9,7 @@ require (
 	github.com/hashicorp/consul/api v1.7.0
 	github.com/heptiolabs/healthcheck v0.0.0-20180807145615-6ff867650f40
 	github.com/kr/text v0.2.0 // indirect
+	github.com/lib/pq v1.8.0
 	github.com/markbates/pkger v0.17.1
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
 	github.com/onsi/ginkgo v1.11.0
