@@ -159,7 +159,7 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	r.recorder.Event(&tenant, corev1.EventTypeNormal, "Reconciliation status changed", "Reconciling deployment finished")
+	r.recorder.Event(&tenant, corev1.EventTypeNormal, "Reconciliation started", "Reconciling deployment finished")
 
 	svc, err := r.desiredService(tenant)
 	if err != nil {
@@ -198,7 +198,7 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	// https://book-v1.book.kubebuilder.io/beyond_basics/creating_events.html
-	r.recorder.Event(&tenant, corev1.EventTypeNormal, "Reconciliation status changed", "Reconciling tenant succeed")
+	r.recorder.Event(&tenant, corev1.EventTypeNormal, "Reconciliation succeed", "Reconciling tenant succeed")
 
 	log.Info("reconciled tenant")
 
