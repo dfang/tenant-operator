@@ -29,7 +29,7 @@ jobs:
           tags: |
             dfang/tenant-operator:latest
             dfang/tenant-operator:${{ github.sha }}
-            dfang/tenant-operator:${{ git rev-parse --short HEAD }}
+            dfang/tenant-operator:$(git rev-parse --short HEAD)
       -
         name: Image digest
         run: echo ${{ steps.docker_build.outputs.digest }}
