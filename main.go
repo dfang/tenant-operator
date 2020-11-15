@@ -39,9 +39,9 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	operatorsv1alpha1 "jdwl.in/operator/api/v1alpha1"
-	"jdwl.in/operator/controllers"
-	"jdwl.in/operator/pkg/helper"
+	operatorsv1alpha1 "jdwl.in/tenant-operator/api/v1alpha1"
+	"jdwl.in/tenant-operator/controllers"
+	"jdwl.in/tenant-operator/pkg/helper"
 	// +kubebuilder:scaffold:imports
 )
 

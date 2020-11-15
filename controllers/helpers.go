@@ -10,8 +10,8 @@ import (
 	"text/template"
 
 	"github.com/markbates/pkger"
-	operatorsv1alpha1 "jdwl.in/operator/api/v1alpha1"
-	"jdwl.in/operator/pkg/helper"
+	operatorsv1alpha1 "jdwl.in/tenant-operator/api/v1alpha1"
+	"jdwl.in/tenant-operator/pkg/helper"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

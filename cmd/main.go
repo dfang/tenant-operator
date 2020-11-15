@@ -17,7 +17,7 @@ import (
 	haikunator "github.com/atrox/haikunatorgo/v2"
 	"github.com/hashicorp/consul/api"
 	"github.com/urfave/cli/v2"
-	operatorsv1alpha1 "jdwl.in/operator/api/v1alpha1"
+	operatorsv1alpha1 "jdwl.in/tenant-operator/api/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

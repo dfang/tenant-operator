@@ -1,5 +1,5 @@
 domain: jdwl.in
-repo: jdwl.in/operator
+repo: jdwl.in/tenant-operator
 resources:
 - group: operators
   kind: Tenant
