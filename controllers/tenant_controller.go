@@ -20,8 +20,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
-	"path/filepath"
 
 	"github.com/go-logr/logr"
 	operatorsv1alpha1 "jdwl.in/operator/api/v1alpha1"
@@ -29,12 +27,11 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"jdwl.in/operator/pkg/helper"
 )
 
 // TenantReconciler reconciles a Tenant object
@@ -73,7 +70,7 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	// goal: get namespace status, if it's been terminating, just return, no more reconciling
 
-	clientset := getClientSet()
+	clientset := helper.GetClientSet()
 	ns, err := clientset.CoreV1().Namespaces().Get(tenant.Namespace, metav1.GetOptions{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: corev1.SchemeGroupVersion.String(), Kind: "Namespace",
@@ -205,33 +202,8 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	return ctrl.Result{}, nil
 }
 
-func (r *TenantReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	mgr.GetFieldIndexer().IndexField(
-		&operatorsv1alpha1.Tenant{}, ".spec.UUID",
-		func(obj runtime.Object) []string {
-			uuid := obj.(*operatorsv1alpha1.Tenant).Spec.UUID
-			if uuid == "" {
-				return nil
-			}
-			return []string{uuid}
-		})
-
-	// add this line
-	r.recorder = mgr.GetEventRecorderFor("Tenant")
-
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&operatorsv1alpha1.Tenant{}).
-		Owns(&appsv1.Deployment{}).
-		// Watches(
-		//   &source.Kind{Type: &webappv1.Redis{}},
-		//   &handler.EnqueueRequestsFromMapFunc{
-		//     ToRequests: handler.ToRequestsFunc(r.booksUsingRedis),
-		//   }).
-		Complete(r)
-}
-
 func (r *TenantReconciler) ScaleNamespace(ns string, replicas int) error {
-	clientset := getClientSet()
+	clientset := helper.GetClientSet()
 	options := metav1.ListOptions{
 		// LabelSelector: "app=<APPNAME>",
 	}
@@ -260,7 +232,6 @@ func (r *TenantReconciler) ScaleNamespace(ns string, replicas int) error {
 			UpdateScale(item.Name, sc)
 		if err != nil {
 			// log.Fatal(err)
-			fmt.Println("errrrrr")
 			fmt.Println(err)
 			return err
 		}
@@ -269,20 +240,27 @@ func (r *TenantReconciler) ScaleNamespace(ns string, replicas int) error {
 	return nil
 }
 
-func getClientSet() *kubernetes.Clientset {
-	// TODO
-	// make this controller run in cluster and out of cluster of cluster (make run)
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		kubeconfig := filepath.Join(os.Getenv("HOME"), ".kube", "config")
-		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
-		if err != nil {
-			panic(err)
-		}
-	}
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		panic(err)
-	}
-	return clientset
+func (r *TenantReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	mgr.GetFieldIndexer().IndexField(
+		&operatorsv1alpha1.Tenant{}, ".spec.UUID",
+		func(obj runtime.Object) []string {
+			uuid := obj.(*operatorsv1alpha1.Tenant).Spec.UUID
+			if uuid == "" {
+				return nil
+			}
+			return []string{uuid}
+		})
+
+	// add this line
+	r.recorder = mgr.GetEventRecorderFor("Tenant")
+
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&operatorsv1alpha1.Tenant{}).
+		Owns(&appsv1.Deployment{}).
+		// Watches(
+		//   &source.Kind{Type: &webappv1.Redis{}},
+		//   &handler.EnqueueRequestsFromMapFunc{
+		//     ToRequests: handler.ToRequestsFunc(r.booksUsingRedis),
+		//   }).
+		Complete(r)
 }
