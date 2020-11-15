@@ -32,7 +32,7 @@ jobs:
           tags: |
             dfang/tenant-operator:latest
             dfang/tenant-operator:${{ github.sha }}
-            dfang/tenant-operator:$SHORTSHA
+            dfang/tenant-operator:${{ env.SHORTSHA }}
       -
         name: Image digest
         run: echo ${{ steps.docker_build.outputs.digest }}
