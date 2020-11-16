@@ -20,3 +20,11 @@ jobs:
         dockerfile: Dockerfile
         username: ${{ secrets.DOCKER_HUB_USERNAME }}
         password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+
+    - uses: mr-smithers-excellent/docker-build-push@v5
+      name: Build & push to ghcr.io
+      with:
+        image: dfang/tenant-operator
+        registry: ghcr.io
+        username: dfang
+        password: ${{ secrets.GHCR_TOKEN }}
