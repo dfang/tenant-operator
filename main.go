@@ -268,6 +268,7 @@ func createNamespace(nsName string) error {
 
 	// query namespace by name, if not exist, create it
 	_, err := clientset.CoreV1().Namespaces().Get(
+		context.TODO(),
 		nsName,
 		metav1.GetOptions{
 			TypeMeta: metav1.TypeMeta{
@@ -282,7 +283,7 @@ func createNamespace(nsName string) error {
 				Labels: map[string]string{"owner": "tenant"},
 			},
 		}
-		_, err := clientset.CoreV1().Namespaces().Create(nsSpec)
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(), nsSpec, metav1.CreateOptions{})
 		if err != nil {
 			panic(err)
 		}

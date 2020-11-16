@@ -105,7 +105,7 @@ func DoSSA(ctx context.Context, cfg *rest.Config, yamlContent string) (*unstruct
 	// 7. Create or Update the object with SSA
 	//     types.ApplyPatchType indicates SSA.
 	//     FieldManager specifies the field owner ID.
-	unstructuredObj, err := dr.Patch(obj.GetName(), types.ApplyPatchType, data, metav1.PatchOptions{
+	unstructuredObj, err := dr.Patch(context.TODO(), obj.GetName(), types.ApplyPatchType, data, metav1.PatchOptions{
 		FieldManager: "tenant-controller",
 	})
 	if err != nil {

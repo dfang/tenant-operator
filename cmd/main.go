@@ -617,7 +617,7 @@ func createNamespace(nsName string) error {
 	clientset := getClientSet()
 
 	// query namespace by name, if not exist, create it
-	_, err := clientset.CoreV1().Namespaces().Get(nsName, metav1.GetOptions{
+	_, err := clientset.CoreV1().Namespaces().Get(context.TODO(), nsName, metav1.GetOptions{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: corev1.SchemeGroupVersion.String(), Kind: "Namespace",
 		},
@@ -630,7 +630,7 @@ func createNamespace(nsName string) error {
 				Labels: map[string]string{"owner": "tenant"},
 			},
 		}
-		_, err := clientset.CoreV1().Namespaces().Create(nsSpec)
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(), nsSpec, metav1.CreateOptions{})
 		if err != nil {
 			panic(err)
 		}
@@ -643,7 +643,7 @@ func createNamespace(nsName string) error {
 func deleteNamespace(nsName string) error {
 	clientset := getClientSet()
 
-	err := clientset.CoreV1().Namespaces().Delete(nsName, &metav1.DeleteOptions{
+	err := clientset.CoreV1().Namespaces().Delete(context.TODO(), nsName, metav1.DeleteOptions{
 		// Background
 		// GracePeriodSeconds: &int64(0),
 		// PropagationPolicy:  &metav1.DeletionPropagation.DeletePropagationBackground,
@@ -665,7 +665,7 @@ func ScaleNamespace(ns string, replicas int) {
 	}
 
 	// list deployments
-	deployList, _ := clientset.AppsV1().Deployments(ns).List(options)
+	deployList, _ := clientset.AppsV1().Deployments(ns).List(context.TODO(), options)
 	// fmt.Println("list deployments")
 	// for _, item := range (*deployList).Items {
 	// 	fmt.Println(item.Name)
@@ -677,7 +677,7 @@ func ScaleNamespace(ns string, replicas int) {
 	for _, item := range (*deployList).Items {
 		sc, err := clientset.AppsV1().
 			Deployments(item.Namespace).
-			GetScale(item.Name, metav1.GetOptions{})
+			GetScale(context.TODO(), item.Name, metav1.GetOptions{})
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -685,7 +685,7 @@ func ScaleNamespace(ns string, replicas int) {
 
 		scale, err := clientset.AppsV1().
 			Deployments(item.Namespace).
-			UpdateScale(item.Name, sc)
+			UpdateScale(context.TODO(), item.Name, sc, metav1.UpdateOptions{})
 		if err != nil {
 			log.Fatal(err)
 		}

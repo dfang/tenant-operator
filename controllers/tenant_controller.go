@@ -85,7 +85,7 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	// goal: get namespace status, if it's been terminating, just return, no more reconciling
 
 	clientset := helper.GetClientSet()
-	ns, err := clientset.CoreV1().Namespaces().Get(tenant.Namespace, metav1.GetOptions{
+	ns, err := clientset.CoreV1().Namespaces().Get(context.TODO(), tenant.Namespace, metav1.GetOptions{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: corev1.SchemeGroupVersion.String(), Kind: "Namespace",
 		},
@@ -271,7 +271,7 @@ func (r *TenantReconciler) ScaleNamespace(ns string, replicas int) error {
 	}
 
 	// list deployments
-	deployList, _ := clientset.AppsV1().Deployments(ns).List(options)
+	deployList, _ := clientset.AppsV1().Deployments(ns).List(context.TODO(), options)
 	fmt.Println("list deployments")
 	for _, item := range (*deployList).Items {
 		fmt.Println(item.Name)
@@ -283,7 +283,7 @@ func (r *TenantReconciler) ScaleNamespace(ns string, replicas int) error {
 	for _, item := range (*deployList).Items {
 		sc, err := clientset.AppsV1().
 			Deployments(item.Namespace).
-			GetScale(item.Name, metav1.GetOptions{})
+			GetScale(context.TODO(), item.Name, metav1.GetOptions{})
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -291,7 +291,7 @@ func (r *TenantReconciler) ScaleNamespace(ns string, replicas int) error {
 
 		scale, err := clientset.AppsV1().
 			Deployments(item.Namespace).
-			UpdateScale(item.Name, sc)
+			UpdateScale(context.TODO(), item.Name, sc, metav1.UpdateOptions{})
 		if err != nil {
 			// log.Fatal(err)
 			fmt.Println(err)
@@ -304,6 +304,7 @@ func (r *TenantReconciler) ScaleNamespace(ns string, replicas int) error {
 
 func (r *TenantReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	mgr.GetFieldIndexer().IndexField(
+		context.TODO(),
 		&operatorsv1alpha1.Tenant{}, ".spec.UUID",
 		func(obj runtime.Object) []string {
 			uuid := obj.(*operatorsv1alpha1.Tenant).Spec.UUID
