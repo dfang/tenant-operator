@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -21,6 +22,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+// GetConfig get config
 func GetConfig() *rest.Config {
 	config, err := rest.InClusterConfig()
 	if err != nil {
@@ -33,6 +35,7 @@ func GetConfig() *rest.Config {
 	return config
 }
 
+// GetClientSet Get a typed clientset
 func GetClientSet() *kubernetes.Clientset {
 	// TODO
 	// make this controller run in cluster and out of cluster of cluster (make run)
@@ -49,6 +52,36 @@ func GetClientSet() *kubernetes.Clientset {
 		panic(err)
 	}
 	return clientset
+}
+
+// CreateNamespace CreateNamespace by name
+func CreateNamespace(nsName string) error {
+	clientset := GetClientSet()
+
+	// query namespace by name, if not exist, create it
+	_, err := clientset.CoreV1().Namespaces().Get(
+		context.TODO(),
+		nsName,
+		metav1.GetOptions{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: corev1.SchemeGroupVersion.String(),
+			},
+		})
+
+	if err != nil {
+		nsSpec := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   nsName,
+				Labels: map[string]string{"owner": "tenant"},
+			},
+		}
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(), nsSpec, metav1.CreateOptions{})
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	return nil
 }
 
 // DoSSA do server side side apply yaml

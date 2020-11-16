@@ -31,8 +31,6 @@ import (
 	"github.com/heptiolabs/healthcheck"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
@@ -236,7 +234,7 @@ spec:
 `
 
 	log.Info().Msgf("Create namespace %s", t.CName)
-	err := createNamespace(t.CName)
+	err := helper.CreateNamespace(t.CName)
 	if err != nil {
 		panic(err)
 	}
@@ -258,35 +256,6 @@ spec:
 	_, err = helper.DoSSA(context.Background(), config, yamlContent)
 	if err != nil {
 		panic(err.Error())
-	}
-
-	return nil
-}
-
-func createNamespace(nsName string) error {
-	clientset := helper.GetClientSet()
-
-	// query namespace by name, if not exist, create it
-	_, err := clientset.CoreV1().Namespaces().Get(
-		context.TODO(),
-		nsName,
-		metav1.GetOptions{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: corev1.SchemeGroupVersion.String(),
-			},
-		})
-
-	if err != nil {
-		nsSpec := &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:   nsName,
-				Labels: map[string]string{"owner": "tenant"},
-			},
-		}
-		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(), nsSpec, metav1.CreateOptions{})
-		if err != nil {
-			panic(err)
-		}
 	}
 
 	return nil
