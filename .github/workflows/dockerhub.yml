@@ -16,7 +16,7 @@ jobs:
       with:
         image: dfang/tenant-operator
         # tags: ${{ github.sha }}, ${{ steps.docker_meta.outputs.tags }}, latest
-        registry: index.docker.io
+        registry: docker.io
         dockerfile: Dockerfile
         username: ${{ secrets.DOCKER_HUB_USERNAME }}
         password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
