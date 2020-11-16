@@ -18,7 +18,6 @@ import (
 
 	haikunator "github.com/atrox/haikunatorgo/v2"
 	operatorsv1alpha1 "github.com/dfang/tenant-operator/api/v1alpha1"
-	"github.com/dfang/tenant-operator/pkg/helper"
 	"github.com/hashicorp/consul/api"
 	"github.com/urfave/cli/v2"
 	appsv1 "k8s.io/api/apps/v1"
@@ -386,11 +385,12 @@ func deleteTenant(kv *api.KV, c *cli.Context) error {
 		return err
 	}
 
-	// delete database for the tenant
-	// delete user for the tenant
-	conn := helper.GetConn(host, port, user, password, dbname)
-	helper.DropDB(conn, string(cname.Value))
-	helper.DropUser(conn, string(cname.Value))
+	// deprecated in favor of finalizers
+	// // delete database for the tenant
+	// // delete user for the tenant
+	// conn := helper.GetConn(host, port, user, password, dbname)
+	// helper.DropDB(conn, string(cname.Value))
+	// helper.DropUser(conn, string(cname.Value))
 
 	return nil
 }
