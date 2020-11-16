@@ -56,15 +56,26 @@ type TenantReconciler struct {
 // Reconcile Reconcile Tenant
 func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
-	log := r.Log.WithValues("tenant", req.NamespacedName)
+	log := r.Log.WithValues("tenant", req)
 
-	var tenant operatorsv1alpha1.Tenant
-	if err := r.Get(ctx, req.NamespacedName, &tenant); err != nil {
+	// Fetch the tenant from the cache
+	tenant := &operatorsv1alpha1.Tenant{}
+	if err := r.Client.Get(context.TODO(), req.NamespacedName, tenant); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	// Set the label if it is missing
+	if tenant.Labels == nil {
+		tenant.Labels = map[string]string{}
+	}
+
+	tenant.Labels["hello"] = "world"
+
 	log.Info(tenant.Spec.UUID)
 	log.Info(tenant.Spec.CName)
+
+	log.Info("FINALIZERS")
+	r.ReconcileFinalizers(tenant)
 
 	// goal: get namespace status, if it's been terminating, just return, no more reconciling
 	clientset := helper.GetClientSet()
@@ -78,20 +89,16 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, nil
 	}
 
-	r.ReconcileFinalizers(req)
-
 	log.Info("reconciling database and user")
 	pwd := helper.GenRandPassword(12)
 
-	r.createDB(tenant)
-	r.createUser(tenant, pwd)
-
-	// r.createSecret(tenant, pwd)
+	r.createDB(*tenant)
+	r.createUser(*tenant, pwd)
 
 	log.Info("tenant", "replicas count: ", tenant.Spec.Replicas)
 
 	// kubectl describe tenant
-	r.recorder.Event(&tenant, corev1.EventTypeNormal, "Reconciled", "Reconciling tenant start")
+	r.recorder.Event(tenant, corev1.EventTypeNormal, "Reconciled", "Reconciling tenant start")
 
 	// if replicas = 0, set namespace to sleep mode
 	// if tenant.Spec.Replicas == 0 {
@@ -104,7 +111,7 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	applyOpts := []client.PatchOption{client.ForceOwnership, client.FieldOwner("tenant-controller")}
 
-	secret, err := r.createSecret(tenant, pwd)
+	secret, err := r.createSecret(*tenant, pwd)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -112,23 +119,23 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	r.recorder.Event(&tenant, corev1.EventTypeNormal, "Reconciliation status changed", "Reconciling secret finished")
+	r.recorder.Event(tenant, corev1.EventTypeNormal, "Reconciliation status changed", "Reconciling secret finished")
 
 	// server side apply generated yaml
-	err = r.desiredIngressRoute(tenant)
+	err = r.desiredIngressRoute(*tenant)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	r.recorder.Event(&tenant, corev1.EventTypeNormal, "Reconciliation status changed", "Reconciling ingressRoute finished")
+	r.recorder.Event(tenant, corev1.EventTypeNormal, "Reconciliation status changed", "Reconciling ingressRoute finished")
 
 	// server side apply generated yaml
-	err = r.desiredConfigmap(tenant)
+	err = r.desiredConfigmap(*tenant)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	r.recorder.Event(&tenant, corev1.EventTypeNormal, "Reconciliation status changed", "Reconciling configmap finished")
+	r.recorder.Event(tenant, corev1.EventTypeNormal, "Reconciliation status changed", "Reconciling configmap finished")
 
-	deployment, err := r.desiredDeployment(tenant)
+	deployment, err := r.desiredDeployment(*tenant)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -136,9 +143,9 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	r.recorder.Event(&tenant, corev1.EventTypeNormal, "Reconciliation started", "Reconciling deployment finished")
+	r.recorder.Event(tenant, corev1.EventTypeNormal, "Reconciliation started", "Reconciling deployment finished")
 
-	svc, err := r.desiredService(tenant)
+	svc, err := r.desiredService(*tenant)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -146,7 +153,7 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	r.recorder.Event(&tenant, corev1.EventTypeNormal, "Reconciliation status changed", "Reconciling service finished")
+	r.recorder.Event(tenant, corev1.EventTypeNormal, "Reconciliation status changed", "Reconciling service finished")
 
 	tenant.Status.URL = fmt.Sprintf("http://%s.jdwl.in", tenant.Spec.CName)
 	tenant.Status.Replicas = tenant.Spec.Replicas
@@ -157,15 +164,15 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		tenant.Status.Status = "Inactive"
 	}
 
-	err = r.Status().Update(ctx, &tenant)
+	err = r.Status().Update(ctx, tenant)
 	if err != nil {
 		fmt.Println(err)
-		r.recorder.Event(&tenant, corev1.EventTypeWarning, "Reconciliation status changed", "Reconciling tenant failed")
+		r.recorder.Event(tenant, corev1.EventTypeWarning, "Reconciliation status changed", "Reconciling tenant failed")
 		return ctrl.Result{}, err
 	}
 
 	// https://book-v1.book.kubebuilder.io/beyond_basics/creating_events.html
-	r.recorder.Event(&tenant, corev1.EventTypeNormal, "Reconciliation succeed", "Reconciling tenant succeed")
+	r.recorder.Event(tenant, corev1.EventTypeNormal, "Reconciliation succeed", "Reconciling tenant succeed")
 
 	log.Info("reconciled tenant")
 
@@ -332,14 +339,7 @@ func removeString(slice []string, s string) (result []string) {
 	return
 }
 
-func (r *TenantReconciler) ReconcileFinalizers(req ctrl.Request) (ctrl.Result, error) {
-	ctx := context.Background()
-
-	var tenant *operatorsv1alpha1.Tenant
-	if err := r.Get(ctx, req.NamespacedName, tenant); err != nil {
-		return ctrl.Result{}, client.IgnoreNotFound(err)
-	}
-
+func (r *TenantReconciler) ReconcileFinalizers(tenant *operatorsv1alpha1.Tenant) (ctrl.Result, error) {
 	// Add finalizer to pre-delete database and user for a tenant
 	// https://book.kubebuilder.io/reference/using-finalizers.html
 	// name of our custom finalizer
@@ -353,7 +353,7 @@ func (r *TenantReconciler) ReconcileFinalizers(req ctrl.Request) (ctrl.Result, e
 		if !containsString(tenant.ObjectMeta.Finalizers, myFinalizerName) {
 			tenant.ObjectMeta.Finalizers = append(tenant.ObjectMeta.Finalizers, myFinalizerName)
 			fmt.Println(tenant)
-			if err := r.Update(context.Background(), tenant, nil); err != nil {
+			if err := r.Update(context.Background(), tenant); err != nil {
 				return ctrl.Result{}, err
 			}
 		}
@@ -369,7 +369,7 @@ func (r *TenantReconciler) ReconcileFinalizers(req ctrl.Request) (ctrl.Result, e
 
 			// remove our finalizer from the list and update it.
 			tenant.ObjectMeta.Finalizers = removeString(tenant.ObjectMeta.Finalizers, myFinalizerName)
-			if err := r.Update(context.Background(), tenant, nil); err != nil {
+			if err := r.Update(context.Background(), tenant); err != nil {
 				return ctrl.Result{}, err
 			}
 		}

@@ -40,8 +40,9 @@ func (r *TenantReconciler) desiredDeployment(tenant operatorsv1alpha1.Tenant) (a
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:  "qor",
-							Image: "dfang/qor-demo:develop-20201019.1",
+							Name: "qor",
+							// Image: "dfang/qor-demo:develop-20201019.1",
+							Image: "dfang/qox:develop-20201116.1",
 							Ports: []corev1.ContainerPort{
 								{ContainerPort: 7000, Name: "http", Protocol: "TCP"},
 								{ContainerPort: 5040, Name: "gowork", Protocol: "TCP"},
@@ -67,6 +68,33 @@ func (r *TenantReconciler) desiredDeployment(tenant operatorsv1alpha1.Tenant) (a
 								"./qor",
 								"--debug",
 								"start",
+							},
+						},
+					},
+					InitContainers: []corev1.Container{
+						{
+							Name: "init",
+							// Image: "dfang/qor-demo:develop-20201019.1",
+							Image: "dfang/qox:develop-20201116.1",
+							Args: []string{
+								"./qor",
+								"migrate",
+							},
+							EnvFrom: []corev1.EnvFromSource{
+								{
+									ConfigMapRef: &corev1.ConfigMapEnvSource{
+										LocalObjectReference: corev1.LocalObjectReference{
+											Name: "env-config",
+										},
+									},
+								},
+								{
+									SecretRef: &corev1.SecretEnvSource{
+										LocalObjectReference: corev1.LocalObjectReference{
+											Name: "db-secret",
+										},
+									},
+								},
 							},
 						},
 					},
