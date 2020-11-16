@@ -5,8 +5,6 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
-	"os"
-	"path/filepath"
 	"text/template"
 
 	operatorsv1alpha1 "github.com/dfang/tenant-operator/api/v1alpha1"
@@ -16,8 +14,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
@@ -99,16 +95,7 @@ func (r *TenantReconciler) desiredService(tenant operatorsv1alpha1.Tenant) (core
 func (r *TenantReconciler) desiredIngressRoute(tenant operatorsv1alpha1.Tenant) error {
 	log := r.Log.WithValues("tenant", tenant.Namespace)
 
-	// TODO
-	// make this controller run in cluster and out of cluster of cluster (make run)
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		kubeconfig := filepath.Join(os.Getenv("HOME"), ".kube", "config")
-		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
-		if err != nil {
-			panic(err)
-		}
-	}
+	config := helper.GetConfig()
 
 	log.Info("reconciling ingressRoute")
 
@@ -124,58 +111,14 @@ func (r *TenantReconciler) desiredIngressRoute(tenant operatorsv1alpha1.Tenant) 
 		Host:        fmt.Sprintf("%s.jdwl.in", tenant.Spec.CName),
 	}
 
-	b := `apiVersion: traefik.containo.us/v1alpha1
-kind: IngressRoute
-metadata:
-  name: {{ .Name }}
-  namespace: {{ .Namespace }}
-  labels:
-    owner: tenant
-spec:
-  entryPoints:
-    - web
-  routes:
-  - match: Host("{{ .Host }}")
-    kind: Rule
-    services:
-    - name: {{ .ServiceName }}
-      namespace: {{ .Namespace }}
-      port: 80
-`
+	yamlContent := renderTemplate("/controllers/templates/ingressRoute.yaml", data)
 
-	tmpl, err := template.New("ingressRoute").Parse(string(b))
-	if err != nil {
-		panic(err)
-	}
-
-	buf := new(bytes.Buffer)
-	err = tmpl.Execute(buf, data)
-	if err != nil {
-		panic(err)
-	}
-
-	yamlContent := buf.String()
-	_, err = helper.DoSSA(context.Background(), config, yamlContent)
+	_, err := helper.DoSSA(context.Background(), config, yamlContent)
 	if err != nil {
 		panic(err.Error())
 	}
 
-	// // don't forget to set owner reference, otherwise infinite reconcile loop
-	// if err := ctrl.SetControllerReference(&tenant, unstructuredObj, r.Scheme); err != nil {
-	// 	fmt.Println(err)
-	// 	return err
-	// }
-
-	// metav1.OwnerReference{
-	//   Kind: "Tenant",
-	//   Name: "",
-	//   UID:
-	// }
-
-	// dr.SetOwnerReferences(metav1.OwnerReference{
-	//   Controller:
-	//   Name:
-	// })
+	// don't forget to set owner reference, otherwise infinite reconcile loop
 
 	log.Info("reconciled ingressRoute")
 
@@ -186,37 +129,43 @@ func (r *TenantReconciler) desiredConfigmap(tenant operatorsv1alpha1.Tenant) err
 	log := r.Log.WithValues("tenant", tenant.Namespace)
 	log.Info("reconciling configmap")
 
-	// TODO
-	// make this controller run in cluster and out of cluster of cluster (make run)
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		kubeconfig := filepath.Join(os.Getenv("HOME"), ".kube", "config")
-		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
-		if err != nil {
-			panic(err)
-		}
-	}
-
-	f, err := pkger.Open("/controllers/templates/env-config.yaml")
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	b, err := ioutil.ReadAll(f)
-	if err != nil {
-		return err
-	}
-
-	tmpl, err := template.New("configmap").Parse(string(b))
-	if err != nil {
-		panic(err)
-	}
+	config := helper.GetConfig()
 
 	data := struct {
 		Namespace string
 	}{
 		Namespace: tenant.Spec.CName,
+	}
+
+	yamlContent := renderTemplate("/controllers/templates/env-config.yaml", data)
+
+	_, err := helper.DoSSA(context.Background(), config, yamlContent)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	log.Info("reconciled configmap")
+
+	return nil
+}
+
+// renderTemplate renderTemplate with data, return yamlContent
+func renderTemplate(tpl string, data interface{}) string {
+	f, err := pkger.Open(tpl)
+	if err != nil {
+		panic(err)
+	}
+
+	defer f.Close()
+
+	b, err := ioutil.ReadAll(f)
+	if err != nil {
+		panic(err)
+	}
+
+	tmpl, err := template.New(tpl).Parse(string(b))
+	if err != nil {
+		panic(err)
 	}
 
 	buf := new(bytes.Buffer)
@@ -226,12 +175,6 @@ func (r *TenantReconciler) desiredConfigmap(tenant operatorsv1alpha1.Tenant) err
 	}
 
 	yamlContent := buf.String()
-	_, err = helper.DoSSA(context.Background(), config, yamlContent)
-	if err != nil {
-		panic(err.Error())
-	}
 
-	log.Info("reconciled configmap")
-
-	return nil
+	return yamlContent
 }
