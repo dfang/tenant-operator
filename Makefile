@@ -1,6 +1,7 @@
 
 # Image URL to use all building/pushing image targets
-IMG ?= dfang/tenant-operator:develop-$(shell git rev-parse --short HEAD)
+# IMG ?= dfang/tenant-operator:develop-$(shell git rev-parse --short HEAD)
+IMG ?= dfang/tenant-operator:latest
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true"
 
