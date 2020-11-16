@@ -19,6 +19,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -46,6 +47,16 @@ import (
 var (
 	scheme   = runtime.NewScheme()
 	setupLog = ctrl.Log.WithName("setup")
+	// DBConn DB Connection
+	DBConn *sql.DB
+)
+
+var (
+	host     = envOrDefault("TENANTS_DB_HOST", "localhost")
+	port     = envOrDefault("TENANTS_DB_PORT", "5432")
+	user     = envOrDefault("TENANTS_DB_USER", "postgres")
+	password = envOrDefault("TENANTS_DB_PASSWORD", "localhost")
+	dbname   = envOrDefault("TENANTS_DB_NAME", "tenants")
 )
 
 func init() {
@@ -56,6 +67,8 @@ func init() {
 }
 
 func main() {
+	conn := helper.GetConn(host, port, user, password, dbname)
+
 	var metricsAddr string
 	var enableLeaderElection bool
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
@@ -88,6 +101,9 @@ func main() {
 		Client: mgr.GetClient(),
 		Log:    ctrl.Log.WithName("controllers").WithName("Tenant"),
 		Scheme: mgr.GetScheme(),
+
+		// DBConn DB Connection
+		DBConn: conn,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Tenant")
 		os.Exit(1)

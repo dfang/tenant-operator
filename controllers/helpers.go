@@ -40,12 +40,34 @@ func (r *TenantReconciler) desiredDeployment(tenant operatorsv1alpha1.Tenant) (a
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:  "whoami",
-							Image: "containous/whoami:latest",
+							Name:  "qor",
+							Image: "dfang/qor-demo:develop-20201019.1",
 							Ports: []corev1.ContainerPort{
-								{ContainerPort: 80, Name: "http", Protocol: "TCP"},
+								{ContainerPort: 7000, Name: "http", Protocol: "TCP"},
+								{ContainerPort: 5040, Name: "gowork", Protocol: "TCP"},
 							},
 							// Resources: *tenant.Spec.Frontend.Resources.DeepCopy(),
+							EnvFrom: []corev1.EnvFromSource{
+								{
+									ConfigMapRef: &corev1.ConfigMapEnvSource{
+										LocalObjectReference: corev1.LocalObjectReference{
+											Name: "env-config",
+										},
+									},
+								},
+								{
+									SecretRef: &corev1.SecretEnvSource{
+										LocalObjectReference: corev1.LocalObjectReference{
+											Name: "db-secret",
+										},
+									},
+								},
+							},
+							Args: []string{
+								"./qor",
+								"--debug",
+								"start",
+							},
 						},
 					},
 				},

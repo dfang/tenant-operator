@@ -33,15 +33,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/dfang/tenant-operator/pkg/helper"
-	_ "github.com/lib/pq"
-)
 
-const (
-	host     = "localhost"
-	port     = 5432
-	user     = "postgres"
-	password = "^[Nd}6Ka_c,A0-ti}1l:iAQN"
-	dbname   = "tenants"
+	_ "github.com/lib/pq"
 )
 
 // TenantReconciler reconciles a Tenant object
@@ -50,6 +43,8 @@ type TenantReconciler struct {
 	Log      logr.Logger
 	Scheme   *runtime.Scheme
 	recorder record.EventRecorder
+
+	DBConn *sql.DB
 }
 
 // +kubebuilder:rbac:groups=operators.jdwl.in,resources=tenants,verbs=get;list;watch;create;update;patch;delete
@@ -58,6 +53,7 @@ type TenantReconciler struct {
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=list;watch;get;patch
 // +kubebuilder:rbac:groups=core,resources=services,verbs=list;watch;get;patch
 
+// Reconcile Reconcile Tenant
 func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
 	log := r.Log.WithValues("tenant", req.NamespacedName)
@@ -67,9 +63,16 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	// Add finalizer to pre-delete database and user for a tenant
+	// https://book.kubebuilder.io/reference/using-finalizers.html
+
 	log.Info("reconciling database and user")
-	createDB(tenant)
-	createUser(tenant)
+	pwd := helper.GenRandPassword(12)
+
+	r.createDB(tenant)
+	r.createUser(tenant, pwd)
+
+	// r.createSecret(tenant, pwd)
 
 	log.Info("tenant", "replicas count: ", tenant.Spec.Replicas)
 
@@ -98,68 +101,6 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	// your logic here
 	log.Info("reconciling tenant")
 
-	// nsSpec := &corev1.Namespace{
-	// 	ObjectMeta: metav1.ObjectMeta{
-	// 		Name: tenant.Spec.UUID,
-	// 		Labels: map[string]string{
-	// 			"namespace": tenant.Spec.UUID,
-	// 		},
-	// 	},
-	// }
-	// found := false
-	// // Fetch namespace list
-	// nsList := &corev1.NamespaceList{}
-	// err := r.List(context.TODO(), nsList, &client.ListOptions{})
-	// if err != nil {
-	// 	return ctrl.Result{}, err
-	// }
-
-	// for _, v := range nsList.Items {
-	// 	fmt.Println(v.Name)
-	// 	if v.Name == nsSpec.Name {
-	// 		found = true
-	// 	}
-	// }
-
-	// if !found {
-	// 	if err := r.Client.Create(ctx, nsSpec); err != nil {
-	// 		fmt.Println("failed to create namespace")
-	// 		fmt.Println(err)
-	// 		os.Exit(1)
-	// 	}
-	// }
-
-	// tenantNs := &corev1.Namespace{
-	// 	TypeMeta: metav1.TypeMeta{
-	// 		APIVersion: corev1.SchemeGroupVersion.String(),
-	// 		Kind:       "Namespace",
-	// 	},
-	// 	ObjectMeta: metav1.ObjectMeta{
-	// 		Name: tenantNsName,
-	// 		Annotations: map[string]string{
-	// 			TenantAdminNamespaceAnnotation: instance.Namespace,
-	// 		},
-	// 		OwnerReferences: []metav1.OwnerReference{expectedOwnerRef},
-	// 	},
-	// }
-	// if err = r.Client.Create(context.TODO(), tenantNs); err != nil {
-	// 	return reconcile.Result{}, err
-	// }
-
-	// client.
-	// nsSpec := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: tenant.ObjectMeta.Namespace}}
-	// // if ns, err := clientset.Core().Namespaces().Create(nsSpec); err != nil {
-	// if ns, err := corev1.Namespaces().Create(nsSpec); err != nil {
-	// 	log.Error(err, "unable to create namespace")
-	// 	return ctrl.Result{}, err
-	// }
-
-	// var tenants operatorsv1alpha1.Tenant
-	// if err := r.List(ctx, &tenants, client.InNamespace(req.Namespace)); err != nil {
-	// 	log.Error(err, "unable to list tenants")
-	// 	return ctrl.Result{}, err
-	// }
-
 	applyOpts := []client.PatchOption{client.ForceOwnership, client.FieldOwner("tenant-controller")}
 
 	deployment, err := r.desiredDeployment(tenant)
@@ -181,6 +122,16 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 	r.recorder.Event(&tenant, corev1.EventTypeNormal, "Reconciliation status changed", "Reconciling service finished")
+
+	secret, err := r.createSecret(tenant, pwd)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	err = r.Patch(ctx, &secret, client.Apply, applyOpts...)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	r.recorder.Event(&tenant, corev1.EventTypeNormal, "Reconciliation status changed", "Reconciling secret finished")
 
 	// server side apply generated yaml
 	err = r.desiredIngressRoute(tenant)
@@ -222,9 +173,14 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	return ctrl.Result{}, nil
 }
 
-func createDB(tenant operatorsv1alpha1.Tenant) {
-	db := getDB()
-	defer db.Close()
+func (r *TenantReconciler) createDB(tenant operatorsv1alpha1.Tenant) {
+	log := r.Log.WithValues("tenant", tenant.Namespace)
+	log.Info("reconciling database")
+
+	db := r.DBConn
+	db.Ping()
+
+	// defer db.Close()
 
 	_, err := db.Exec(fmt.Sprintf(`CREATE DATABASE "%s"`, tenant.Spec.CName))
 	if err != nil {
@@ -234,34 +190,50 @@ func createDB(tenant operatorsv1alpha1.Tenant) {
 	}
 }
 
-func createUser(tenant operatorsv1alpha1.Tenant) {
-	db := getDB()
-	defer db.Close()
+func (r *TenantReconciler) createSecret(tenant operatorsv1alpha1.Tenant, password string) (corev1.Secret, error) {
+	log := r.Log.WithValues("tenant", tenant.Namespace)
+	log.Info("reconciling secret")
 
-	_, err := db.Exec(fmt.Sprintf(`CREATE USER "%s" WITH PASSWORD '%s';`, tenant.Spec.CName, "xxxxx"))
-	if err != nil {
-		fmt.Println(err.Error())
-	} else {
-		fmt.Println("Successfully created database..")
+	data := make(map[string]string)
+	data["DBPassword"] = password
+
+	sec := corev1.Secret{
+		TypeMeta: metav1.TypeMeta{APIVersion: corev1.SchemeGroupVersion.String(), Kind: "Secret"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "db-secret",
+			Namespace: tenant.Namespace,
+		},
+		StringData: data,
+		Type:       "generic",
 	}
+	if err := ctrl.SetControllerReference(&tenant, &sec, r.Scheme); err != nil {
+		return sec, err
+	}
+	log.Info("reconciled secret")
+
+	return sec, nil
 }
 
-func getDB() *sql.DB {
-	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
-		host, port, user, password, dbname)
-	fmt.Println(psqlInfo)
+func (r *TenantReconciler) createUser(tenant operatorsv1alpha1.Tenant, password string) {
+	log := r.Log.WithValues("tenant", tenant.Namespace)
+	log.Info("reconciling database user")
 
-	db, err := sql.Open("postgres", psqlInfo)
+	db := r.DBConn
+	db.Ping()
+
+	// defer db.Close()
+	stmt := fmt.Sprintf(`CREATE USER "%s" WITH PASSWORD '%s';`, tenant.Spec.CName, password)
+	log.Info(stmt)
+
+	_, err := db.Exec(stmt)
 	if err != nil {
-		panic(err)
+		// fmt.Println(err.Error())
+		_, err := db.Exec(fmt.Sprintf(`DROP USER "%s";`, tenant.Spec.CName))
+		fmt.Println(err)
+		_, err = db.Exec(stmt)
+	} else {
+		fmt.Println("Successfully created user..")
 	}
-
-	err = db.Ping()
-	if err != nil {
-		panic(err)
-	}
-
-	return db
 }
 
 func (r *TenantReconciler) ScaleNamespace(ns string, replicas int) error {
@@ -272,12 +244,12 @@ func (r *TenantReconciler) ScaleNamespace(ns string, replicas int) error {
 
 	// list deployments
 	deployList, _ := clientset.AppsV1().Deployments(ns).List(context.TODO(), options)
-	fmt.Println("list deployments")
-	for _, item := range (*deployList).Items {
-		fmt.Println(item.Name)
-		fmt.Println(item.Namespace)
-		fmt.Println(item.Status)
-	}
+	// fmt.Println("list deployments")
+	// for _, item := range (*deployList).Items {
+	// 	fmt.Println(item.Name)
+	// 	fmt.Println(item.Namespace)
+	// 	fmt.Println(item.Status)
+	// }
 
 	// scale replicas to zero for a given namespace
 	for _, item := range (*deployList).Items {
@@ -293,8 +265,6 @@ func (r *TenantReconciler) ScaleNamespace(ns string, replicas int) error {
 			Deployments(item.Namespace).
 			UpdateScale(context.TODO(), item.Name, sc, metav1.UpdateOptions{})
 		if err != nil {
-			// log.Fatal(err)
-			fmt.Println(err)
 			return err
 		}
 		fmt.Printf("Set namespace %s replicas to %d\n", item.Name, scale.Spec.Replicas)

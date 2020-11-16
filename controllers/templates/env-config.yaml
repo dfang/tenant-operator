@@ -1,16 +1,17 @@
 apiVersion: v1
 data:
+  DEBUG: "true"
   AUTH_AGENT_ID: "1000027"
   AUTH_CORP_ID: wxfd0a488aa1fa5171
   AUTH_CORP_SECRET: xxxxxxyyyyyzzzzz
   AUTH_DOMAIN: www.xsjd123.com
   DBAdapter: postgres
-  DBHost: postgres
+  DBHost: tenants.pgo.svc
   DBName: {{ .Namespace }}
-  DBPassword: aytwA8pLwlif
+  # saved to secret
+  # DBPassword: aytwA8pLwlif
   DBPort: "5432"
-  DBUser: postgres
-  DEBUG: "false"
+  DBUser: {{ .Namespace }}
   FAKTORY_URL: tcp://:admin@47.103.58.246:17419
   HTTPS: "false"
   PORT: "7000"

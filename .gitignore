@@ -24,3 +24,5 @@ bin
 *~
 operator
 tmp
+
+.env*

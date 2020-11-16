@@ -66,3 +66,10 @@ GLOBAL OPTIONS:
    --config FILE  Load configuration from FILE
    --help, -h     show help (default: false)
 ```
+
+
+### ENV FOR DB Connections
+```
+export $(cat .env.local | xargs)
+export $(cat .env| xargs)
+```

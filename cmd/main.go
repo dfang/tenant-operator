@@ -14,8 +14,11 @@ import (
 
 	"text/tabwriter"
 
+	_ "github.com/lib/pq"
+
 	haikunator "github.com/atrox/haikunatorgo/v2"
 	operatorsv1alpha1 "github.com/dfang/tenant-operator/api/v1alpha1"
+	"github.com/dfang/tenant-operator/pkg/helper"
 	"github.com/hashicorp/consul/api"
 	"github.com/urfave/cli/v2"
 	appsv1 "k8s.io/api/apps/v1"
@@ -32,6 +35,14 @@ import (
 
 var (
 	scheme = runtime.NewScheme()
+)
+
+var (
+	host     = envOrDefault("TENANTS_DB_HOST", "localhost")
+	port     = envOrDefault("TENANTS_DB_PORT", "5432")
+	user     = envOrDefault("TENANTS_DB_USER", "postgres")
+	password = envOrDefault("TENANTS_DB_PASSWORD", "localhost")
+	dbname   = envOrDefault("TENANTS_DB_NAME", "tenants")
 )
 
 func init() {
@@ -348,6 +359,7 @@ func addTenant(kv *api.KV, c *cli.Context) error {
 func deleteTenant(kv *api.KV, c *cli.Context) error {
 	// delete tenant namespace
 	// remove key from consul
+
 	if c.NArg() == 0 {
 		cli.ShowSubcommandHelp(c)
 		return nil
@@ -373,6 +385,12 @@ func deleteTenant(kv *api.KV, c *cli.Context) error {
 		fmt.Println(err)
 		return err
 	}
+
+	// delete database for the tenant
+	// delete user for the tenant
+	conn := helper.GetConn(host, port, user, password, dbname)
+	helper.DropDB(conn, string(cname.Value))
+	helper.DropUser(conn, string(cname.Value))
 
 	return nil
 }
@@ -715,4 +733,11 @@ func putKey(kv *api.KV, k, v string) error {
 		return err
 	}
 	return nil
+}
+
+func envOrDefault(v, def string) string {
+	if os.Getenv(v) != "" {
+		return os.Getenv(v)
+	}
+	return def
 }

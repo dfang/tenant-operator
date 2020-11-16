@@ -2,10 +2,13 @@ package helper
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -146,4 +149,71 @@ func DoSSA(ctx context.Context, cfg *rest.Config, yamlContent string) (*unstruct
 	}
 
 	return unstructuredObj, err
+}
+
+// GenRandPassword Generate Random Password
+// https://yourbasic.org/golang/generate-random-string/
+func GenRandPassword(n int) string {
+	rand.Seed(time.Now().UnixNano())
+	digits := "0123456789"
+	specials := "~=+%^*/()[]{}/!@#$?|"
+	all := "ABCDEFGHIJKLMNOPQRSTUVWXYZ" +
+		"abcdefghijklmnopqrstuvwxyz" +
+		digits + specials
+	length := n
+	buf := make([]byte, length)
+	buf[0] = digits[rand.Intn(len(digits))]
+	buf[1] = specials[rand.Intn(len(specials))]
+	for i := 2; i < length; i++ {
+		buf[i] = all[rand.Intn(len(all))]
+	}
+	rand.Shuffle(len(buf), func(i, j int) {
+		buf[i], buf[j] = buf[j], buf[i]
+	})
+	str := string(buf)
+
+	return str
+}
+
+// GetConn get a db connection
+func GetConn(host, port, user, password, dbname string) *sql.DB {
+	psqlInfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		host, port, user, password, dbname)
+	// fmt.Println(psqlInfo)
+
+	db, err := sql.Open("postgres", psqlInfo)
+	if err != nil {
+		panic(err)
+	}
+
+	err = db.Ping()
+	if err != nil {
+		panic(err)
+	}
+
+	return db
+}
+
+// DropDB drop db when remove a tenant
+func DropDB(db *sql.DB, dbName string) {
+	defer db.Close()
+
+	_, err := db.Exec(fmt.Sprintf(`DROP DATABASE "%s"`, dbName))
+	if err != nil {
+		fmt.Println(err.Error())
+	} else {
+		fmt.Println("Successfully dropped database..")
+	}
+}
+
+// DropUser drop user when remove a tenant
+func DropUser(db *sql.DB, userName string) {
+	defer db.Close()
+
+	_, err := db.Exec(fmt.Sprintf(`DROP USER "%s"`, userName))
+	if err != nil {
+		fmt.Println(err.Error())
+	} else {
+		fmt.Println("Successfully dropped user..")
+	}
 }
