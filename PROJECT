@@ -1,5 +1,5 @@
 domain: jdwl.in
-repo: jdwl.in/tenant-operator
+repo: github.com/dfang/tenant-operator
 resources:
 - group: operators
   kind: Tenant

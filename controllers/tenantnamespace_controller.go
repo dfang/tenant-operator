@@ -28,7 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	operatorsv1alpha1 "jdwl.in/tenant-operator/api/v1alpha1"
+	operatorsv1alpha1 "github.com/dfang/tenant-operator/api/v1alpha1"
 )
 
 // TenantNamespaceReconciler reconciles a TenantNamespace object

@@ -1,4 +1,4 @@
-module jdwl.in/tenant-operator
+module github.com/dfang/tenant-operator
 
 go 1.13
 

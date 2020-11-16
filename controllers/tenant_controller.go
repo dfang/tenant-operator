@@ -22,8 +22,8 @@ import (
 	"fmt"
 	"log"
 
+	operatorsv1alpha1 "github.com/dfang/tenant-operator/api/v1alpha1"
 	"github.com/go-logr/logr"
-	operatorsv1alpha1 "jdwl.in/tenant-operator/api/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -32,8 +32,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/dfang/tenant-operator/pkg/helper"
 	_ "github.com/lib/pq"
-	"jdwl.in/tenant-operator/pkg/helper"
 )
 
 const (
