@@ -63,8 +63,22 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	// Add finalizer to pre-delete database and user for a tenant
-	// https://book.kubebuilder.io/reference/using-finalizers.html
+	log.Info(tenant.Spec.UUID)
+	log.Info(tenant.Spec.CName)
+
+	// goal: get namespace status, if it's been terminating, just return, no more reconciling
+	clientset := helper.GetClientSet()
+	ns, err := clientset.CoreV1().Namespaces().Get(context.TODO(), tenant.Namespace, metav1.GetOptions{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: corev1.SchemeGroupVersion.String(), Kind: "Namespace",
+		},
+	})
+
+	if ns.Status.Phase == corev1.NamespaceTerminating {
+		return ctrl.Result{}, nil
+	}
+
+	r.ReconcileFinalizers(req)
 
 	log.Info("reconciling database and user")
 	pwd := helper.GenRandPassword(12)
@@ -85,23 +99,34 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	// return ctrl.Result{}, nil
 	// }
 
-	// goal: get namespace status, if it's been terminating, just return, no more reconciling
-
-	clientset := helper.GetClientSet()
-	ns, err := clientset.CoreV1().Namespaces().Get(context.TODO(), tenant.Namespace, metav1.GetOptions{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: corev1.SchemeGroupVersion.String(), Kind: "Namespace",
-		},
-	})
-
-	if ns.Status.Phase == corev1.NamespaceTerminating {
-		return ctrl.Result{}, nil
-	}
-
 	// your logic here
 	log.Info("reconciling tenant")
 
 	applyOpts := []client.PatchOption{client.ForceOwnership, client.FieldOwner("tenant-controller")}
+
+	secret, err := r.createSecret(tenant, pwd)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	err = r.Patch(ctx, &secret, client.Apply, applyOpts...)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	r.recorder.Event(&tenant, corev1.EventTypeNormal, "Reconciliation status changed", "Reconciling secret finished")
+
+	// server side apply generated yaml
+	err = r.desiredIngressRoute(tenant)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	r.recorder.Event(&tenant, corev1.EventTypeNormal, "Reconciliation status changed", "Reconciling ingressRoute finished")
+
+	// server side apply generated yaml
+	err = r.desiredConfigmap(tenant)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	r.recorder.Event(&tenant, corev1.EventTypeNormal, "Reconciliation status changed", "Reconciling configmap finished")
 
 	deployment, err := r.desiredDeployment(tenant)
 	if err != nil {
@@ -122,32 +147,6 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 	r.recorder.Event(&tenant, corev1.EventTypeNormal, "Reconciliation status changed", "Reconciling service finished")
-
-	secret, err := r.createSecret(tenant, pwd)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-	err = r.Patch(ctx, &secret, client.Apply, applyOpts...)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-	r.recorder.Event(&tenant, corev1.EventTypeNormal, "Reconciliation status changed", "Reconciling secret finished")
-
-	// server side apply generated yaml
-	err = r.desiredIngressRoute(tenant)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-	r.recorder.Event(&tenant, corev1.EventTypeNormal, "Reconciliation status changed", "Reconciling ingressRoute finished")
-
-	log.Info(tenant.Spec.UUID)
-	log.Info(tenant.Spec.CName)
-
-	// server side apply generated yaml
-	err = r.desiredConfigmap(tenant)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
 
 	tenant.Status.URL = fmt.Sprintf("http://%s.jdwl.in", tenant.Spec.CName)
 	tenant.Status.Replicas = tenant.Spec.Replicas
@@ -296,4 +295,114 @@ func (r *TenantReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		//     ToRequests: handler.ToRequestsFunc(r.booksUsingRedis),
 		//   }).
 		Complete(r)
+}
+
+func (r *TenantReconciler) deleteExternalResources(tenant operatorsv1alpha1.Tenant) error {
+	//
+	// delete any external resources associated with the cronJob
+	//
+	// Ensure that delete implementation is idempotent and safe to invoke
+	// multiple types for same object.
+
+	// remove database and user
+
+	r.dropDB(tenant)
+	r.dropUser(tenant)
+
+	return nil
+}
+
+// Helper functions to check and remove string from a slice of strings.
+func containsString(slice []string, s string) bool {
+	for _, item := range slice {
+		if item == s {
+			return true
+		}
+	}
+	return false
+}
+
+func removeString(slice []string, s string) (result []string) {
+	for _, item := range slice {
+		if item == s {
+			continue
+		}
+		result = append(result, item)
+	}
+	return
+}
+
+func (r *TenantReconciler) ReconcileFinalizers(req ctrl.Request) (ctrl.Result, error) {
+	ctx := context.Background()
+
+	var tenant *operatorsv1alpha1.Tenant
+	if err := r.Get(ctx, req.NamespacedName, tenant); err != nil {
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	// Add finalizer to pre-delete database and user for a tenant
+	// https://book.kubebuilder.io/reference/using-finalizers.html
+	// name of our custom finalizer
+	myFinalizerName := "database.finalizers.jdwl.in"
+
+	// examine DeletionTimestamp to determine if object is under deletion
+	if tenant.ObjectMeta.DeletionTimestamp.IsZero() {
+		// The object is not being deleted, so if it does not have our finalizer,
+		// then lets add the finalizer and update the object. This is equivalent
+		// registering our finalizer.
+		if !containsString(tenant.ObjectMeta.Finalizers, myFinalizerName) {
+			tenant.ObjectMeta.Finalizers = append(tenant.ObjectMeta.Finalizers, myFinalizerName)
+			fmt.Println(tenant)
+			if err := r.Update(context.Background(), tenant, nil); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
+	} else {
+		// The object is being deleted
+		if containsString(tenant.ObjectMeta.Finalizers, myFinalizerName) {
+			// our finalizer is present, so lets handle any external dependency
+			if err := r.deleteExternalResources(*tenant); err != nil {
+				// if fail to delete the external dependency here, return with error
+				// so that it can be retried
+				return ctrl.Result{}, err
+			}
+
+			// remove our finalizer from the list and update it.
+			tenant.ObjectMeta.Finalizers = removeString(tenant.ObjectMeta.Finalizers, myFinalizerName)
+			if err := r.Update(context.Background(), tenant, nil); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
+	}
+
+	return ctrl.Result{}, nil
+}
+
+func (r *TenantReconciler) dropDB(tenant operatorsv1alpha1.Tenant) {
+	log := r.Log.WithValues("tenant", tenant.Namespace)
+	log.Info("finalizing database")
+
+	db := r.DBConn
+	_, err := db.Exec(fmt.Sprintf(`DROP DATABASE "%s"`, tenant.Spec.CName))
+	if err != nil {
+		fmt.Println(err.Error())
+	} else {
+		fmt.Println("Successfully dropped database..")
+	}
+}
+
+func (r *TenantReconciler) dropUser(tenant operatorsv1alpha1.Tenant) {
+	log := r.Log.WithValues("tenant", tenant.Namespace)
+	log.Info("finalizing database user")
+
+	db := r.DBConn
+	// defer db.Close()
+
+	_, err := db.Exec(fmt.Sprintf(`DROP USER "%s";`, tenant.Spec.CName))
+	if err != nil {
+		// fmt.Println(err.Error())
+		fmt.Println(err)
+	} else {
+		fmt.Println("Successfully dropped user..")
+	}
 }
