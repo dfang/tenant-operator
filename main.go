@@ -30,8 +30,6 @@ import (
 	"time"
 
 	"github.com/heptiolabs/healthcheck"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
@@ -91,7 +89,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout})
+	// log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout})
 
 	port := envOrDefault("PORT", "9876")
 	go StartWebhookd(port)
@@ -126,7 +124,7 @@ func StartHealthCheck(port string) {
 	webhookURL := fmt.Sprintf("http://localhost:%s", port)
 	health.AddLivenessCheck("webhook", healthcheck.HTTPGetCheck(webhookURL, 500*time.Millisecond))
 	setupLog.Info("HealthCheck listens on: 0.0.0.0:8086")
-	log.Fatal().Msg(http.ListenAndServe("0.0.0.0:8086", health).Error())
+	setupLog.Info(http.ListenAndServe("0.0.0.0:8086", health).Error())
 }
 
 // StartWebhookd start webhookd
@@ -134,7 +132,7 @@ func StartWebhookd(port string) {
 	http.HandleFunc("/", InsertEventHandler)
 
 	setupLog.Info(fmt.Sprintf("Webhookd listens on: 0.0.0.0:%s", port))
-	log.Fatal().Msg(http.ListenAndServe(fmt.Sprintf(":%s", port), nil).Error())
+	setupLog.Info(http.ListenAndServe(fmt.Sprintf(":%s", port), nil).Error())
 }
 
 // InsertEventHandler handle tenants table insert event
@@ -142,7 +140,7 @@ func InsertEventHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" {
 		fmt.Fprintln(w, "ok")
 	} else if r.Method == "POST" {
-		log.Info().Msg("webhook received a request")
+		setupLog.Info("webhook received a request")
 
 		// body, err := httputil.DumpRequest(r, true)
 		// if err != nil {
@@ -158,7 +156,6 @@ func InsertEventHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Println(string(body))
 
 		v := TenantCreatedEvent{}
-		log.Info().Msg("unmarshaling")
 		err = json.Unmarshal(body, &v)
 		if err != nil {
 			panic(err)
@@ -171,12 +168,12 @@ func InsertEventHandler(w http.ResponseWriter, r *http.Request) {
 
 		fmt.Printf("%#v\n", t)
 
-		log.Info().Msgf("uuid: %s", t.UUID)
-		log.Info().Msgf("cname: %s", t.CName)
+		// log.Info().Msgf("uuid: %s", t.UUID)
+		// log.Info().Msgf("cname: %s", t.CName)
 
 		CreateTenant(t)
 
-		log.Info().Msgf("created tenant %s with uuid: %s", t.CName, t.UUID)
+		// log.Info().Msgf("created tenant %s with uuid: %s", t.CName, t.UUID)
 
 	} else {
 		http.Error(w, "Invalid request method.", 405)
@@ -225,7 +222,7 @@ func envOrDefault(v, def string) string {
 }
 
 func fail(err error) {
-	log.Fatal().Msg(err.Error())
+	// log.Fatal().Msg(err.Error())
 	os.Exit(-1)
 }
 
@@ -249,13 +246,13 @@ spec:
   uuid: {{ .UUID }}
 `
 
-	log.Info().Msgf("Create namespace %s", t.CName)
+	// log.Info().Msgf("Create namespace %s", t.CName)
 	err := helper.CreateNamespaceIfNotExist(t.CName)
 	if err != nil {
 		panic(err)
 	}
 
-	log.Info().Msgf("Create tenant %s in namspace %s", t.CName, t.CName)
+	// log.Info().Msgf("Create tenant %s in namspace %s", t.CName, t.CName)
 	tpl, err := template.New("tenant").Parse(tenantTpl)
 	if err != nil {
 		panic(err)

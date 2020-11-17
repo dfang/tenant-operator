@@ -22,7 +22,6 @@ require (
 	github.com/onsi/gomega v1.10.1
 	github.com/prometheus/client_golang v1.8.0 // indirect
 	github.com/prometheus/common v0.15.0 // indirect
-	github.com/rs/zerolog v1.20.0
 	github.com/stretchr/testify v1.6.1 // indirect
 	github.com/urfave/cli/v2 v2.2.0
 	go.uber.org/multierr v1.6.0 // indirect
