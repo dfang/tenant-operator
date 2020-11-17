@@ -75,7 +75,7 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	log.Info(tenant.Spec.CName)
 
 	log.Info("Reconcile FINALIZERS")
-	if result, err := r.ReconcileFinalizers(tenant); err != nil {
+	if result, err := r.reconcileFinalizers(tenant); err != nil {
 		return result, err
 	}
 
@@ -116,7 +116,7 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	// r.createUser(*tenant, pwd)
-	secret, err := r.createSecret(*tenant, pwd)
+	secret, err := r.desiredSecret(*tenant, pwd)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -184,87 +184,6 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	return ctrl.Result{}, nil
 }
 
-func (r *TenantReconciler) createDB(tenant operatorsv1alpha1.Tenant) error {
-	log := r.Log.WithValues("tenant", tenant.Namespace)
-	log.Info("reconciling database")
-
-	db := r.DBConn
-	// defer db.Close()
-
-	statement := fmt.Sprintf(`SELECT EXISTS(SELECT datname FROM pg_catalog.pg_database WHERE datname = '%s');`, tenant.Spec.CName)
-	row := db.QueryRow(statement)
-	var exists bool
-	err := row.Scan(&exists)
-	check(err)
-
-	if exists {
-		return nil
-	}
-
-	statement = fmt.Sprintf(`CREATE DATABASE "%s";`, tenant.Spec.CName)
-	_, err = db.Exec(statement)
-	if err != nil {
-		fmt.Println("got error when create database", err.Error())
-	} else {
-		fmt.Println("Successfully created database..")
-	}
-
-	return nil
-}
-
-func check(err error) {
-	if err != nil {
-		fmt.Println(err)
-	}
-}
-
-func (r *TenantReconciler) createSecret(tenant operatorsv1alpha1.Tenant, password string) (corev1.Secret, error) {
-	log := r.Log.WithValues("tenant", tenant.Namespace)
-	log.Info("reconciling secret")
-
-	data := make(map[string]string)
-	data["DBPassword"] = password
-
-	sec := corev1.Secret{
-		TypeMeta: metav1.TypeMeta{APIVersion: corev1.SchemeGroupVersion.String(), Kind: "Secret"},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "db-secret",
-			Namespace: tenant.Namespace,
-		},
-		StringData: data,
-		Type:       "generic",
-	}
-	if err := ctrl.SetControllerReference(&tenant, &sec, r.Scheme); err != nil {
-		return sec, err
-	}
-	log.Info("reconciled secret")
-
-	r.createOrUpdateUser(tenant, password)
-
-	return sec, nil
-}
-
-func (r *TenantReconciler) createOrUpdateUser(tenant operatorsv1alpha1.Tenant, password string) {
-	log := r.Log.WithValues("tenant", tenant.Namespace)
-	log.Info("reconciling database user")
-
-	db := r.DBConn
-	db.Ping()
-
-	// defer db.Close()
-	stmt := fmt.Sprintf(`CREATE USER "%s" WITH PASSWORD '%s';`, tenant.Spec.CName, password)
-	log.Info(stmt)
-
-	_, err := db.Exec(stmt)
-	if err != nil {
-		stmt := fmt.Sprintf(`ALTER USER "%s" WITH PASSWORD '%s';`, tenant.Spec.CName, password)
-		_, err = db.Exec(stmt)
-		fmt.Println(err)
-	} else {
-		fmt.Println("Successfully created/updated database user ...")
-	}
-}
-
 func (r *TenantReconciler) ScaleNamespace(ns string, replicas int) error {
 	clientset := helper.GetClientSet()
 	options := metav1.ListOptions{
@@ -325,115 +244,4 @@ func (r *TenantReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		//     ToRequests: handler.ToRequestsFunc(r.booksUsingRedis),
 		//   }).
 		Complete(r)
-}
-
-// Helper functions to check and remove string from a slice of strings.
-func containsString(slice []string, s string) bool {
-	for _, item := range slice {
-		if item == s {
-			return true
-		}
-	}
-	return false
-}
-
-func removeString(slice []string, s string) (result []string) {
-	for _, item := range slice {
-		if item == s {
-			continue
-		}
-		result = append(result, item)
-	}
-	return
-}
-
-func (r *TenantReconciler) ReconcileFinalizers(tenant *operatorsv1alpha1.Tenant) (ctrl.Result, error) {
-	// Add finalizer to pre-delete database and user for a tenant
-	// https://book.kubebuilder.io/reference/using-finalizers.html
-	// name of our custom finalizer
-	myFinalizerName := "database.finalizers.jdwl.in"
-
-	// examine DeletionTimestamp to determine if object is under deletion
-	if tenant.ObjectMeta.DeletionTimestamp.IsZero() {
-		// The object is not being deleted, so if it does not have our finalizer,
-		// then lets add the finalizer and update the object. This is equivalent
-		// registering our finalizer.
-		if !containsString(tenant.ObjectMeta.Finalizers, myFinalizerName) {
-			tenant.ObjectMeta.Finalizers = append(tenant.ObjectMeta.Finalizers, myFinalizerName)
-			fmt.Println(tenant)
-			if err := r.Update(context.Background(), tenant); err != nil {
-				return ctrl.Result{}, err
-			}
-		}
-	} else {
-		// The object is being deleted
-		if containsString(tenant.ObjectMeta.Finalizers, myFinalizerName) {
-			// our finalizer is present, so lets handle any external dependency
-			if err := r.deleteExternalResources(*tenant); err != nil {
-				// if fail to delete the external dependency here, return with error
-				// so that it can be retried
-				return ctrl.Result{}, err
-			}
-
-			// remove our finalizer from the list and update it.
-			tenant.ObjectMeta.Finalizers = removeString(tenant.ObjectMeta.Finalizers, myFinalizerName)
-			if err := r.Update(context.Background(), tenant); err != nil {
-				return ctrl.Result{}, err
-			}
-		}
-	}
-
-	return ctrl.Result{}, nil
-}
-
-func (r *TenantReconciler) deleteExternalResources(tenant operatorsv1alpha1.Tenant) error {
-	//
-	// delete any external resources associated with the cronJob
-	//
-	// Ensure that delete implementation is idempotent and safe to invoke
-	// multiple types for same object.
-
-	// remove database and user when a tenant deleted
-	if err := r.dropDB(tenant); err != nil {
-		return err
-	}
-
-	if err := r.dropUser(tenant); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (r *TenantReconciler) dropDB(tenant operatorsv1alpha1.Tenant) error {
-	log := r.Log.WithValues("tenant", tenant.Namespace)
-	log.Info("finalizing database")
-
-	db := r.DBConn
-	_, err := db.Exec(fmt.Sprintf(`DROP DATABASE "%s"`, tenant.Spec.CName))
-	if err != nil {
-		fmt.Println(err.Error())
-		return err
-	}
-
-	fmt.Println("Successfully dropped database..")
-	return nil
-}
-
-func (r *TenantReconciler) dropUser(tenant operatorsv1alpha1.Tenant) error {
-	log := r.Log.WithValues("tenant", tenant.Namespace)
-	log.Info("finalizing database user")
-
-	db := r.DBConn
-	// defer db.Close()
-
-	_, err := db.Exec(fmt.Sprintf(`DROP USER "%s";`, tenant.Spec.CName))
-	if err != nil {
-		// fmt.Println(err.Error())
-		fmt.Println(err)
-		return err
-	}
-
-	fmt.Println("Successfully dropped user..")
-	return nil
 }
