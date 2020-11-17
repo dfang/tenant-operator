@@ -414,10 +414,9 @@ func (r *TenantReconciler) dropDB(tenant operatorsv1alpha1.Tenant) error {
 	if err != nil {
 		fmt.Println(err.Error())
 		return err
-	} else {
-		fmt.Println("Successfully dropped database..")
 	}
 
+	fmt.Println("Successfully dropped database..")
 	return nil
 }
 
@@ -433,8 +432,8 @@ func (r *TenantReconciler) dropUser(tenant operatorsv1alpha1.Tenant) error {
 		// fmt.Println(err.Error())
 		fmt.Println(err)
 		return err
-	} else {
-		fmt.Println("Successfully dropped user..")
 	}
+
+	fmt.Println("Successfully dropped user..")
 	return nil
 }
