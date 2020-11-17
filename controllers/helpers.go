@@ -392,8 +392,18 @@ func (r *TenantReconciler) dropDB(tenant operatorsv1alpha1.Tenant) error {
 	log.Info("finalizing database")
 
 	db := r.DBConn
-	_, err := db.Exec(fmt.Sprintf(`DROP DATABASE "%s"`, tenant.Spec.CName))
-	if err != nil {
+
+	// terminate connections first
+	// https://stackoverflow.com/questions/17449420/postgresql-unable-to-drop-database-because-of-some-auto-connections-to-db
+	stmt := fmt.Sprintf(`SELECT pid, pg_terminate_backend(pid)
+            FROM pg_stat_activity
+            WHERE datname = '%s' AND pid <> pg_backend_pid();`, tenant.Spec.CName)
+	if _, err := db.Exec(stmt); err != nil {
+		fmt.Println(err.Error())
+		return err
+	}
+
+	if _, err := db.Exec(fmt.Sprintf(`DROP DATABASE "%s"`, tenant.Spec.CName)); err != nil {
 		fmt.Println(err.Error())
 		return err
 	}
