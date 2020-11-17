@@ -179,20 +179,37 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	return ctrl.Result{}, nil
 }
 
-func (r *TenantReconciler) createDB(tenant operatorsv1alpha1.Tenant) {
+func (r *TenantReconciler) createDB(tenant operatorsv1alpha1.Tenant) error {
 	log := r.Log.WithValues("tenant", tenant.Namespace)
 	log.Info("reconciling database")
 
 	db := r.DBConn
-	db.Ping()
-
 	// defer db.Close()
 
-	_, err := db.Exec(fmt.Sprintf(`CREATE DATABASE "%s"`, tenant.Spec.CName))
+	statement := fmt.Sprintf(`SELECT EXISTS(SELECT datname FROM pg_catalog.pg_database WHERE datname = '%s');`, tenant.Spec.CName)
+	row := db.QueryRow(statement)
+	var exists bool
+	err := row.Scan(&exists)
+	check(err)
+
+	if exists {
+		return nil
+	}
+
+	statement = fmt.Sprintf(`CREATE DATABASE "%s";`, tenant.Spec.CName)
+	_, err = db.Exec(statement)
 	if err != nil {
-		fmt.Println(err.Error())
+		fmt.Println("got error when create database", err.Error())
 	} else {
 		fmt.Println("Successfully created database..")
+	}
+
+	return nil
+}
+
+func check(err error) {
+	if err != nil {
+		fmt.Println(err)
 	}
 }
 
@@ -233,10 +250,9 @@ func (r *TenantReconciler) createUser(tenant operatorsv1alpha1.Tenant, password 
 
 	_, err := db.Exec(stmt)
 	if err != nil {
-		// fmt.Println(err.Error())
-		_, err := db.Exec(fmt.Sprintf(`DROP USER "%s";`, tenant.Spec.CName))
-		fmt.Println(err)
+		stmt := fmt.Sprintf(`ALTER USER "%s" WITH PASSWORD '%s';`, tenant.Spec.CName, password)
 		_, err = db.Exec(stmt)
+		fmt.Println(err)
 	} else {
 		fmt.Println("Successfully created user..")
 	}

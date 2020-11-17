@@ -120,7 +120,7 @@ func (r *TenantReconciler) desiredService(tenant operatorsv1alpha1.Tenant) (core
 	svc := corev1.Service{
 		TypeMeta: metav1.TypeMeta{APIVersion: corev1.SchemeGroupVersion.String(), Kind: "Service"},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      tenant.Name,
+			Name:      "qox",
 			Namespace: tenant.Namespace,
 		},
 		Spec: corev1.ServiceSpec{
