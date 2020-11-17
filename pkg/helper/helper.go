@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"os"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -21,6 +22,8 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
 // controller runtime
@@ -28,14 +31,23 @@ import (
 
 // GetClientSet Get a typed clientset
 func GetClientSet() *kubernetes.Clientset {
-	// TODO
-	// make this controller run in cluster and out of cluster of cluster (make run)
-	config := ctrl.GetConfigOrDie()
-	clientset, err := kubernetes.NewForConfig(config)
+	cfg := ctrl.GetConfigOrDie()
+	clientset, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
 		panic(err)
 	}
 	return clientset
+}
+
+// GetClientOrDie return controller runtime's client.Client or die
+// https://pkg.go.dev/sigs.k8s.io/controller-runtime/pkg/client#Client
+func GetClientOrDie() client.Client {
+	cl, err := client.New(config.GetConfigOrDie(), client.Options{})
+	if err != nil {
+		fmt.Println("failed to create client")
+		os.Exit(1)
+	}
+	return cl
 }
 
 // CreateNamespace CreateNamespace by name
@@ -63,6 +75,44 @@ func CreateNamespace(nsName string) error {
 		if err != nil {
 			panic(err)
 		}
+	}
+
+	return nil
+}
+
+// CreateNamespaceIfNotExist create namespace if not exist
+func CreateNamespaceIfNotExist(nsName string) error {
+	// query namespace by name, if not exist, create it
+	ns := &corev1.Namespace{}
+	err := GetClientOrDie().Get(context.Background(), client.ObjectKey{
+		Name: nsName,
+	}, ns)
+
+	if err != nil {
+		ns.Name = nsName
+		if err := GetClientOrDie().Create(context.Background(), ns); err != nil {
+			return err
+		}
+		fmt.Println("namespace created ")
+	}
+
+	return nil
+}
+
+// DeleteNamespaceIfExist delete namespace if exists
+func DeleteNamespaceIfExist(nsName string) error {
+	// query namespace by name, if not exist, create it
+	ns := &corev1.Namespace{}
+	err := GetClientOrDie().Get(context.Background(), client.ObjectKey{
+		Name: nsName,
+	}, ns)
+
+	if err != nil {
+		ns.Name = nsName
+		if err := GetClientOrDie().Delete(context.Background(), ns); err != nil {
+			return err
+		}
+		fmt.Println("namespace deleted")
 	}
 
 	return nil

@@ -250,7 +250,7 @@ spec:
 `
 
 	log.Info().Msgf("Create namespace %s", t.CName)
-	err := helper.CreateNamespace(t.CName)
+	err := helper.CreateNamespaceIfNotExist(t.CName)
 	if err != nil {
 		panic(err)
 	}

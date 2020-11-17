@@ -18,6 +18,7 @@ import (
 
 	haikunator "github.com/atrox/haikunatorgo/v2"
 	operatorsv1alpha1 "github.com/dfang/tenant-operator/api/v1alpha1"
+	"github.com/dfang/tenant-operator/pkg/helper"
 	"github.com/hashicorp/consul/api"
 	"github.com/urfave/cli/v2"
 	appsv1 "k8s.io/api/apps/v1"
@@ -333,16 +334,7 @@ func addTenant(kv *api.KV, c *cli.Context) error {
 		os.Exit(1)
 	}
 
-	// fmt.Println("Create namespace")
-	createNamespace(cnameV)
-
-	// fmt.Println("Create tenant namespace")
-	// err = cl.Create(context.Background(), &ns)
-	// if err != nil {
-	// 	fmt.Println("failed to create tenant namespace")
-	// 	fmt.Println(err)
-	// 	os.Exit(1)
-	// }
+	_ = helper.CreateNamespaceIfNotExist(cnameV)
 
 	fmt.Printf("Created tenant, uuid: %s, cname: %s, replicas: %d\n", tenantKey, cnameV, replicas)
 	err = cl.Create(context.Background(), &t)
@@ -376,7 +368,7 @@ func deleteTenant(kv *api.KV, c *cli.Context) error {
 		return nil
 	}
 
-	deleteNamespace(string(cname.Value))
+	_ = helper.DeleteNamespaceIfExist(string(cname.Value))
 
 	_, err = kv.DeleteTree("tenants/"+uuid+"/", nil)
 	fmt.Println("delete key", "tenants/"+uuid)
@@ -413,7 +405,7 @@ func purgeTenants(kv *api.KV) error {
 		}
 		// tenants/03a90b115da101169870/
 		fmt.Println("delete namespace ", string(cname.Value))
-		deleteNamespace(string(cname.Value))
+		_ = helper.DeleteNamespaceIfExist(string(cname.Value))
 	}
 
 	cmd := exec.Command("consul", "kv", "delete", "-recurse", "tenants/")
@@ -629,49 +621,6 @@ func randomHex(n int) (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(bytes), nil
-}
-
-func createNamespace(nsName string) error {
-	clientset := getClientSet()
-
-	// query namespace by name, if not exist, create it
-	_, err := clientset.CoreV1().Namespaces().Get(context.TODO(), nsName, metav1.GetOptions{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: corev1.SchemeGroupVersion.String(), Kind: "Namespace",
-		},
-	})
-
-	if err != nil {
-		nsSpec := &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:   nsName,
-				Labels: map[string]string{"owner": "tenant"},
-			},
-		}
-		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(), nsSpec, metav1.CreateOptions{})
-		if err != nil {
-			panic(err)
-		}
-		// fmt.Println(ns.Name)
-	}
-
-	return nil
-}
-
-func deleteNamespace(nsName string) error {
-	clientset := getClientSet()
-
-	err := clientset.CoreV1().Namespaces().Delete(context.TODO(), nsName, metav1.DeleteOptions{
-		// Background
-		// GracePeriodSeconds: &int64(0),
-		// PropagationPolicy:  &metav1.DeletionPropagation.DeletePropagationBackground,
-	})
-	if err != nil {
-		log.Println(err)
-		return err
-	}
-
-	return nil
 }
 
 // ScaleNamespace scale replicas to n for deployments in a namespace

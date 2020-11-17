@@ -71,13 +71,14 @@ GLOBAL OPTIONS:
 ### Some commands maybe helpful when developing on local
 
 ```
+kubectl -n pgo port-forward svc/tenants 5432:5432
 export $(cat .env.local | xargs)
+
+
 
 export $(cat .env| xargs)
 
 kubectl -n pgo port-forward svc/postgres-operator 8443:8443
-
-kubectl -n pgo port-forward svc/tenants 5432:5432
 
 pgo show user tenants --show-system-accounts
 
