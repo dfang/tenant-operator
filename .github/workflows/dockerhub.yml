@@ -1,4 +1,4 @@
-name: CI to Docker hub
+name: Build and Push Docker Image
 
 on:
   push:
@@ -12,7 +12,7 @@ jobs:
       name: Check out code
 
     - uses: mr-smithers-excellent/docker-build-push@v3
-      name: Build & push Docker image
+      name: Build & push to DockerHub
       with:
         image: dfang/tenant-operator
         # tags: ${{ github.sha }}, ${{ steps.docker_meta.outputs.tags }}, latest
@@ -26,6 +26,7 @@ jobs:
       name: Build & push to ghcr.io
       with:
         image: dfang/tenant-operator
+        tag: develop, latest
         registry: ghcr.io
         username: dfang
         password: ${{ secrets.GHCR_TOKEN }}
