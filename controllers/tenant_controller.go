@@ -90,50 +90,42 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, nil
 	}
 
-	pwd := helper.GenRandPassword(12)
-
 	log.Info("tenant", "replicas count: ", tenant.Spec.Replicas)
 
-	// kubectl describe tenant
-	r.recorder.Event(tenant, corev1.EventTypeNormal, "Reconciled", "Reconciling tenant start")
+	// // kubectl describe tenant
+	// r.recorder.Event(tenant, corev1.EventTypeNormal, "Reconciled", "Reconciling tenant start")
 
-	// if replicas = 0, set namespace to sleep mode
-	// if tenant.Spec.Replicas == 0 {
-	_ = r.scaleNamespace(tenant.Namespace, int(tenant.Spec.Replicas))
-	// return ctrl.Result{}, nil
-	// }
+	// // if replicas = 0, set namespace to sleep mode
+	// // if tenant.Spec.Replicas == 0 {
+	// _ = r.scaleNamespace(tenant.Namespace, int(tenant.Spec.Replicas))
+	// // return ctrl.Result{}, nil
+	// // }
 
 	// your logic here
 	log.Info("reconciling tenant")
 
-	_, err = r.reconcileDB(tenant)
-	if err != nil {
-		return ctrl.Result{}, err
+	if result, err := r.reconcileDB(tenant); err != nil {
+		return result, err
 	}
 
-	_, err = r.reconcileSecret(tenant, pwd)
-	if err != nil {
-		return ctrl.Result{}, err
+	if result, err := r.reconcileSecret(tenant); err != nil {
+		return result, err
 	}
 
-	_, err = r.reconcileConfigmap(tenant)
-	if err != nil {
-		return ctrl.Result{}, err
+	if result, err := r.reconcileConfigmap(tenant); err != nil {
+		return result, err
 	}
 
-	_, err = r.reconcileIngressRoute(tenant)
-	if err != nil {
-		return ctrl.Result{}, err
+	if result, err := r.reconcileIngressRoute(tenant); err != nil {
+		return result, err
 	}
 
-	_, err = r.reconcileDeployment(tenant)
-	if err != nil {
-		return ctrl.Result{}, err
+	if result, err := r.reconcileDeployment(tenant); err != nil {
+		return result, err
 	}
 
-	_, err = r.reconcileService(tenant)
-	if err != nil {
-		return ctrl.Result{}, err
+	if result, err := r.reconcileService(tenant); err != nil {
+		return result, err
 	}
 
 	_, err = r.updateStatus(tenant)
@@ -150,7 +142,7 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 func (r *TenantReconciler) reconcileDeployment(tenant *operatorsv1alpha1.Tenant) (ctrl.Result, error) {
 	applyOpts := []client.PatchOption{client.ForceOwnership, client.FieldOwner("tenant-controller")}
-	deployment, err := r.desiredDeployment(*tenant)
+	deployment, err := r.desiredDeployment(tenant)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -198,10 +190,10 @@ func (r *TenantReconciler) reconcileIngressRoute(tenant *operatorsv1alpha1.Tenan
 	r.recorder.Event(tenant, corev1.EventTypeNormal, "Reconciliation status changed", "Reconciling ingressRoute finished")
 
 	return ctrl.Result{}, nil
-
 }
 
-func (r *TenantReconciler) reconcileSecret(tenant *operatorsv1alpha1.Tenant, password string) (ctrl.Result, error) {
+func (r *TenantReconciler) reconcileSecret(tenant *operatorsv1alpha1.Tenant) (ctrl.Result, error) {
+	password := helper.GenRandPassword(12)
 	applyOpts := []client.PatchOption{client.ForceOwnership, client.FieldOwner("tenant-controller")}
 	// r.createUser(*tenant, pwd)
 	secret, err := r.desiredSecret(*tenant, password)
@@ -302,7 +294,7 @@ func (r *TenantReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&operatorsv1alpha1.Tenant{}).
 		Owns(&appsv1.Deployment{}).
 		// Watches(
-		//   &source.Kind{Type: &webappv1.Redis{}},
+		//   &source.Kind{Type: &operatorsv1alpha1.Tenant{}},
 		//   &handler.EnqueueRequestsFromMapFunc{
 		//     ToRequests: handler.ToRequestsFunc(r.booksUsingRedis),
 		//   }).

@@ -15,7 +15,7 @@ data:
   FAKTORY_URL: tcp://:admin@47.103.58.246:17419
   HTTPS: "false"
   PORT: "7000"
-  REDIS_HOST: redis
+  REDIS_HOST: redis.{{ .Namespace }}.svc
   REDIS_PORT: "6379"
 kind: ConfigMap
 metadata:

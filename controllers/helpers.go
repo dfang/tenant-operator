@@ -17,7 +17,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
-func (r *TenantReconciler) desiredDeployment(tenant operatorsv1alpha1.Tenant) (appsv1.Deployment, error) {
+func (r *TenantReconciler) desiredDeployment(tenant *operatorsv1alpha1.Tenant) (appsv1.Deployment, error) {
 	log := r.Log.WithValues("tenant", tenant.Namespace)
 
 	log.Info("reconciling deployment")
@@ -103,7 +103,7 @@ func (r *TenantReconciler) desiredDeployment(tenant operatorsv1alpha1.Tenant) (a
 		},
 	}
 
-	if err := ctrl.SetControllerReference(&tenant, &depl, r.Scheme); err != nil {
+	if err := ctrl.SetControllerReference(tenant, &depl, r.Scheme); err != nil {
 		return depl, err
 	}
 
@@ -222,6 +222,29 @@ func (r *TenantReconciler) desiredSecret(tenant operatorsv1alpha1.Tenant, passwo
 	r.createOrUpdateUser(tenant, password)
 
 	return sec, nil
+}
+
+func (r *TenantReconciler) reconcileRedis(tenant operatorsv1alpha1.Tenant) error {
+	log := r.Log.WithValues("tenant", tenant.Namespace)
+	log.Info("reconciling redis")
+	config := ctrl.GetConfigOrDie()
+
+	data := struct {
+		Namespace string
+	}{
+		Namespace: tenant.Spec.CName,
+	}
+
+	yamlContent := renderTemplate("/controllers/templates/redis.yaml", data)
+	_, err := helper.DoSSA(context.Background(), config, yamlContent)
+	if err != nil {
+		return err
+	}
+
+	// don't forget to set owner reference, otherwise infinite reconcile loop
+	log.Info("reconciled redis")
+
+	return nil
 }
 
 func (r *TenantReconciler) createDB(tenant operatorsv1alpha1.Tenant) error {
