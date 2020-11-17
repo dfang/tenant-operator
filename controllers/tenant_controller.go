@@ -74,8 +74,10 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	log.Info(tenant.Spec.UUID)
 	log.Info(tenant.Spec.CName)
 
-	log.Info("FINALIZERS")
-	r.ReconcileFinalizers(tenant)
+	log.Info("Reconcile FINALIZERS")
+	if result, err := r.ReconcileFinalizers(tenant); err != nil {
+		return result, err
+	}
 
 	// goal: get namespace status, if it's been terminating, just return, no more reconciling
 	clientset := helper.GetClientSet()
@@ -89,11 +91,7 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, nil
 	}
 
-	log.Info("reconciling database and user")
 	pwd := helper.GenRandPassword(12)
-
-	r.createDB(*tenant)
-	r.createUser(*tenant, pwd)
 
 	log.Info("tenant", "replicas count: ", tenant.Spec.Replicas)
 
@@ -111,6 +109,13 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	applyOpts := []client.PatchOption{client.ForceOwnership, client.FieldOwner("tenant-controller")}
 
+	log.Info("reconciling database and user")
+	err = r.createDB(*tenant)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// r.createUser(*tenant, pwd)
 	secret, err := r.createSecret(*tenant, pwd)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -234,10 +239,12 @@ func (r *TenantReconciler) createSecret(tenant operatorsv1alpha1.Tenant, passwor
 	}
 	log.Info("reconciled secret")
 
+	r.createOrUpdateUser(tenant, password)
+
 	return sec, nil
 }
 
-func (r *TenantReconciler) createUser(tenant operatorsv1alpha1.Tenant, password string) {
+func (r *TenantReconciler) createOrUpdateUser(tenant operatorsv1alpha1.Tenant, password string) {
 	log := r.Log.WithValues("tenant", tenant.Namespace)
 	log.Info("reconciling database user")
 
@@ -254,7 +261,7 @@ func (r *TenantReconciler) createUser(tenant operatorsv1alpha1.Tenant, password 
 		_, err = db.Exec(stmt)
 		fmt.Println(err)
 	} else {
-		fmt.Println("Successfully created user..")
+		fmt.Println("Successfully created/updated database user ...")
 	}
 }
 
@@ -320,21 +327,6 @@ func (r *TenantReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *TenantReconciler) deleteExternalResources(tenant operatorsv1alpha1.Tenant) error {
-	//
-	// delete any external resources associated with the cronJob
-	//
-	// Ensure that delete implementation is idempotent and safe to invoke
-	// multiple types for same object.
-
-	// remove database and user
-
-	r.dropDB(tenant)
-	r.dropUser(tenant)
-
-	return nil
-}
-
 // Helper functions to check and remove string from a slice of strings.
 func containsString(slice []string, s string) bool {
 	for _, item := range slice {
@@ -394,7 +386,26 @@ func (r *TenantReconciler) ReconcileFinalizers(tenant *operatorsv1alpha1.Tenant)
 	return ctrl.Result{}, nil
 }
 
-func (r *TenantReconciler) dropDB(tenant operatorsv1alpha1.Tenant) {
+func (r *TenantReconciler) deleteExternalResources(tenant operatorsv1alpha1.Tenant) error {
+	//
+	// delete any external resources associated with the cronJob
+	//
+	// Ensure that delete implementation is idempotent and safe to invoke
+	// multiple types for same object.
+
+	// remove database and user when a tenant deleted
+	if err := r.dropDB(tenant); err != nil {
+		return err
+	}
+
+	if err := r.dropUser(tenant); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *TenantReconciler) dropDB(tenant operatorsv1alpha1.Tenant) error {
 	log := r.Log.WithValues("tenant", tenant.Namespace)
 	log.Info("finalizing database")
 
@@ -402,12 +413,15 @@ func (r *TenantReconciler) dropDB(tenant operatorsv1alpha1.Tenant) {
 	_, err := db.Exec(fmt.Sprintf(`DROP DATABASE "%s"`, tenant.Spec.CName))
 	if err != nil {
 		fmt.Println(err.Error())
+		return err
 	} else {
 		fmt.Println("Successfully dropped database..")
 	}
+
+	return nil
 }
 
-func (r *TenantReconciler) dropUser(tenant operatorsv1alpha1.Tenant) {
+func (r *TenantReconciler) dropUser(tenant operatorsv1alpha1.Tenant) error {
 	log := r.Log.WithValues("tenant", tenant.Namespace)
 	log.Info("finalizing database user")
 
@@ -418,7 +432,9 @@ func (r *TenantReconciler) dropUser(tenant operatorsv1alpha1.Tenant) {
 	if err != nil {
 		// fmt.Println(err.Error())
 		fmt.Println(err)
+		return err
 	} else {
 		fmt.Println("Successfully dropped user..")
 	}
+	return nil
 }

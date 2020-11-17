@@ -42,7 +42,7 @@ func (r *TenantReconciler) desiredDeployment(tenant operatorsv1alpha1.Tenant) (a
 						{
 							Name: "qor",
 							// Image: "dfang/qor-demo:develop-20201019.1",
-							Image: "dfang/qox:develop-20201116.1",
+							Image: "dfang/qox:develop-20201117.1",
 							Ports: []corev1.ContainerPort{
 								{ContainerPort: 7000, Name: "http", Protocol: "TCP"},
 								{ContainerPort: 5040, Name: "gowork", Protocol: "TCP"},
