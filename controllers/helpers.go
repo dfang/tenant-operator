@@ -145,7 +145,7 @@ func (r *TenantReconciler) desiredService(tenant operatorsv1alpha1.Tenant) (core
 func (r *TenantReconciler) desiredIngressRoute(tenant operatorsv1alpha1.Tenant) error {
 	log := r.Log.WithValues("tenant", tenant.Namespace)
 
-	config := helper.GetConfig()
+	config := ctrl.GetConfigOrDie()
 
 	log.Info("reconciling ingressRoute")
 
@@ -179,8 +179,7 @@ func (r *TenantReconciler) desiredConfigmap(tenant operatorsv1alpha1.Tenant) err
 	log := r.Log.WithValues("tenant", tenant.Namespace)
 	log.Info("reconciling configmap")
 
-	config := helper.GetConfig()
-
+	config := ctrl.GetConfigOrDie()
 	data := struct {
 		Namespace string
 	}{

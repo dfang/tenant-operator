@@ -267,7 +267,7 @@ spec:
 		panic(err)
 	}
 	yamlContent := buf.String()
-	config := helper.GetConfig()
+	config := ctrl.GetConfigOrDie()
 
 	_, err = helper.DoSSA(context.Background(), config, yamlContent)
 	if err != nil {
