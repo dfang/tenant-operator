@@ -68,8 +68,21 @@ GLOBAL OPTIONS:
 ```
 
 
-### ENV FOR DB Connections
+### Some commands maybe helpful when developing on local
+
 ```
 export $(cat .env.local | xargs)
+
 export $(cat .env| xargs)
+
+kubectl -n pgo port-forward svc/postgres-operator 8443:8443
+
+kubectl -n pgo port-forward svc/tenants 5432:5432
+
+pgo show user tenants --show-system-accounts
+
+pgo delete user --username=solitary-mud-a18aaf3f1 --selector=name=tenants --no-prompt
+
+pgo update user -n pgo tenants --username=hidden-block-645179a57 --password=2d0O/o7(+|#*
+
 ```

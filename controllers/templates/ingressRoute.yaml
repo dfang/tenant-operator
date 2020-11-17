@@ -12,7 +12,7 @@ spec:
   - match: Host("{{ .Host }}")
     kind: Rule
     services:
-    - name: {{ .ServiceName }}
+    - name: qox
       namespace: {{ .Namespace }}
       port: 80
 
