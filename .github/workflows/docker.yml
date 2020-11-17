@@ -1,0 +1,32 @@
+name: Build and Push Docker Image
+
+on:
+  push:
+    branches: develop
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+      name: Check out code
+
+    - uses: mr-smithers-excellent/docker-build-push@v5
+      name: Build & push to DockerHub
+      with:
+        image: dfang/tenant-operator
+        # tags: ${{ github.sha }}, ${{ steps.docker_meta.outputs.tags }}, latest
+        tags: latest, develop, ${{ github.sha }}
+        registry: docker.io
+        dockerfile: Dockerfile
+        username: ${{ secrets.DOCKER_HUB_USERNAME }}
+        password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+
+    - uses: mr-smithers-excellent/docker-build-push@v5
+      name: Build & push to ghcr.io
+      with:
+        image: dfang/tenant-operator
+        tags: latest, develop, ${{ github.sha }}
+        registry: ghcr.io
+        username: dfang
+        password: ${{ secrets.GHCR_TOKEN }}
