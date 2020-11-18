@@ -224,7 +224,19 @@ func (r *TenantReconciler) desiredSecret(tenant operatorsv1alpha1.Tenant, passwo
 	return sec, nil
 }
 
-func (r *TenantReconciler) reconcileRedis(tenant operatorsv1alpha1.Tenant) error {
+// https://github.com/kubernetes/apimachinery/issues/109
+// can't server side apply two resource in one yaml
+func (r *TenantReconciler) reconcileRedis(tenant *operatorsv1alpha1.Tenant) (ctrl.Result, error) {
+	if r, err := r.reconcileRedisDeployment(tenant); err != nil {
+		return r, err
+	}
+	if r, err := r.reconcileRedisSvc(tenant); err != nil {
+		return r, err
+	}
+	return ctrl.Result{}, nil
+}
+
+func (r *TenantReconciler) reconcileRedisDeployment(tenant *operatorsv1alpha1.Tenant) (ctrl.Result, error) {
 	log := r.Log.WithValues("tenant", tenant.Namespace)
 	log.Info("reconciling redis")
 	config := ctrl.GetConfigOrDie()
@@ -235,16 +247,47 @@ func (r *TenantReconciler) reconcileRedis(tenant operatorsv1alpha1.Tenant) error
 		Namespace: tenant.Spec.CName,
 	}
 
-	yamlContent := renderTemplate("/controllers/templates/redis.yaml", data)
+	yamlContent := renderTemplate("/controllers/templates/redis-deploy.yaml", data)
+
+	fmt.Println(yamlContent)
+
 	_, err := helper.DoSSA(context.Background(), config, yamlContent)
 	if err != nil {
-		return err
+		log.Info("err when doSSA: ", err)
+		return ctrl.Result{}, err
 	}
 
 	// don't forget to set owner reference, otherwise infinite reconcile loop
 	log.Info("reconciled redis")
 
-	return nil
+	return ctrl.Result{}, nil
+}
+
+func (r *TenantReconciler) reconcileRedisSvc(tenant *operatorsv1alpha1.Tenant) (ctrl.Result, error) {
+	log := r.Log.WithValues("tenant", tenant.Namespace)
+	log.Info("reconciling redis")
+	config := ctrl.GetConfigOrDie()
+
+	data := struct {
+		Namespace string
+	}{
+		Namespace: tenant.Spec.CName,
+	}
+
+	yamlContent := renderTemplate("/controllers/templates/redis-svc.yaml", data)
+
+	fmt.Println(yamlContent)
+
+	_, err := helper.DoSSA(context.Background(), config, yamlContent)
+	if err != nil {
+		log.Info("err when doSSA: ", err)
+		return ctrl.Result{}, err
+	}
+
+	// don't forget to set owner reference, otherwise infinite reconcile loop
+	log.Info("reconciled redis")
+
+	return ctrl.Result{}, nil
 }
 
 func (r *TenantReconciler) createDB(tenant operatorsv1alpha1.Tenant) error {
