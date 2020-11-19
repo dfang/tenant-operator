@@ -153,7 +153,7 @@ func (r *TenantReconciler) desiredIngressRoute(tenant operatorsv1alpha1.Tenant) 
 		Name:        tenant.Spec.CName,
 		Namespace:   tenant.Spec.CName,
 		ServiceName: tenant.Spec.CName,
-		Host:        fmt.Sprintf("%s.jdwl.in", tenant.Spec.CName),
+		Host:        r.getTenantSubdomain(tenant.Spec.CName),
 	}
 
 	yamlContent := renderTemplate("/controllers/templates/ingressRoute.yaml", data)
@@ -166,6 +166,10 @@ func (r *TenantReconciler) desiredIngressRoute(tenant operatorsv1alpha1.Tenant) 
 	// don't forget to set owner reference, otherwise infinite reconcile loop
 
 	return nil
+}
+
+func (r *TenantReconciler) getTenantSubdomain(cname string) string {
+	return fmt.Sprintf("%s.%s", cname, r.Domain)
 }
 
 func (r *TenantReconciler) desiredConfigmap(tenant operatorsv1alpha1.Tenant) error {

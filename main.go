@@ -56,6 +56,8 @@ var (
 	user     = envOrDefault("TENANTS_DB_USER", "postgres")
 	password = envOrDefault("TENANTS_DB_PASSWORD", "localhost")
 	dbname   = envOrDefault("TENANTS_DB_NAME", "tenants")
+	// domain subdmaon for a tenant is http://cname.{{.DOAMIN}}
+	domain = envOrDefault("TENANTS_DOMAIN", "jdwl.in")
 )
 
 func init() {
@@ -107,6 +109,8 @@ func main() {
 
 		// DBConn DB Connection
 		DBConn: conn,
+		// Tenant Domain
+		Domain: domain,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Tenant")
 		os.Exit(1)

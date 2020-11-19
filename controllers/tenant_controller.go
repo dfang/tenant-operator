@@ -43,6 +43,7 @@ type TenantReconciler struct {
 	recorder record.EventRecorder
 
 	DBConn *sql.DB
+	Domain string
 }
 
 // +kubebuilder:rbac:groups=operators.jdwl.in,resources=tenants,verbs=get;list;watch;create;update;patch;delete
