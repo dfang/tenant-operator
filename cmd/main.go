@@ -284,20 +284,6 @@ func addTenant(kv *api.KV, c *cli.Context) error {
 		return err
 	}
 
-	_ = operatorsv1alpha1.TenantNamespace{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: appsv1.SchemeGroupVersion.String(), Kind: "TenantNamespace",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cnameV,
-			Namespace: "default",
-			Labels:    map[string]string{"namespace-owner": "tenant"},
-		},
-		Spec: operatorsv1alpha1.TenantNamespaceSpec{
-			Name: tenantKey,
-		},
-	}
-
 	t := operatorsv1alpha1.Tenant{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: appsv1.SchemeGroupVersion.String(), Kind: "Tenant",
@@ -316,11 +302,10 @@ func addTenant(kv *api.KV, c *cli.Context) error {
 	if dryRun {
 		// https://miminar.fedorapeople.org/_preview/openshift-enterprise/registry-redeploy/go_client/serializing_and_deserializing.html
 		// Create a YAML serializer.  JSON is a subset of YAML, so is supported too.
-		s := json.NewYAMLSerializer(json.DefaultMetaFactory, clientgoscheme.Scheme,
-			clientgoscheme.Scheme)
+		ysz := json.NewYAMLSerializer(json.DefaultMetaFactory, clientgoscheme.Scheme, clientgoscheme.Scheme)
 
 		// Encode the object to YAML.
-		err := s.Encode(&t, os.Stdout)
+		err := ysz.Encode(&t, os.Stdout)
 		if err != nil {
 			fmt.Println(err)
 		}
@@ -334,7 +319,10 @@ func addTenant(kv *api.KV, c *cli.Context) error {
 		os.Exit(1)
 	}
 
-	_ = helper.CreateNamespaceIfNotExist(cnameV)
+	if err := helper.CreateNamespaceIfNotExist(cnameV); err != nil {
+		fmt.Println("failed to create namespace")
+		os.Exit(1)
+	}
 
 	fmt.Printf("Created tenant, uuid: %s, cname: %s, replicas: %d\n", tenantKey, cnameV, replicas)
 	err = cl.Create(context.Background(), &t)
@@ -378,13 +366,6 @@ func deleteTenant(kv *api.KV, c *cli.Context) error {
 		fmt.Println(err)
 		return err
 	}
-
-	// deprecated in favor of finalizers
-	// // delete database for the tenant
-	// // delete user for the tenant
-	// conn := helper.GetConn(host, port, user, password, dbname)
-	// helper.DropDB(conn, string(cname.Value))
-	// helper.DropUser(conn, string(cname.Value))
 
 	return nil
 }
@@ -437,7 +418,24 @@ func listTenants(kv *api.KV, c *cli.Context) {
 		panic(err)
 	}
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 5, ' ', tabwriter.AlignRight)
+	tl := &operatorsv1alpha1.TenantList{}
+	// client from controller runtime
+	cl, err := client.New(config.GetConfigOrDie(), client.Options{})
+	if err != nil {
+		fmt.Println("failed to create client")
+		os.Exit(1)
+	}
+	// w := tabwriter.NewWriter(os.Stdout, 1, 1, 3, ' ', tabwriter.AlignRight)
+	writer := tabwriter.NewWriter(os.Stdout, 0, 8, 1, '\t', tabwriter.AlignRight)
+	// w := new(tabwriter.Writer)
+	// w.Init(os.Stdout, 2, 8, 2, '\t', tabwriter.AlignRight)
+
+	// c is a created client.
+	_ = cl.List(context.Background(), tl)
+	fmt.Fprintf(w, "UUID\tCName\tURL\tStatus\tReplicas\n")
+	for _, t := range tl.Items {
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%d\n", t.Spec.UUID, t.Spec.CName, t.Status.URL, t.Status.Status, t.Status.Replicas)
+	}
 
 	if c.String("o") == "uuid" {
 		// fmt.Fprintln(w, "UUID")
