@@ -20,7 +20,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"os"
 	"time"
 
 	operatorsv1alpha1 "github.com/dfang/tenant-operator/api/v1alpha1"
@@ -31,7 +30,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/serializer/json"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -137,10 +135,11 @@ func (r *TenantReconciler) reconcileDeployment(tenant *operatorsv1alpha1.Tenant)
 	log.Info("reconciling qox deployment")
 
 	deploy, err := r.desiredDeployment(*tenant)
-	ysz := json.NewYAMLSerializer(json.DefaultMetaFactory, nil, nil)
-	if err = ysz.Encode(&deploy, os.Stdout); err != nil {
-		panic(err)
-	}
+
+	// ysz := json.NewYAMLSerializer(json.DefaultMetaFactory, nil, nil)
+	// if err = ysz.Encode(&deploy, os.Stdout); err != nil {
+	// 	panic(err)
+	// }
 
 	if err != nil {
 		return ctrl.Result{}, err
@@ -176,9 +175,9 @@ func (r *TenantReconciler) reconcileDeployment(tenant *operatorsv1alpha1.Tenant)
 	})
 
 	if err != nil {
-		log.Error(err, "Deployment reconcile failed")
+		log.Error(err, "deployment reconcile failed")
 	} else {
-		log.Info("Deployment successfully reconciled", "operation", op)
+		log.Info("deployment successfully reconciled", "operation", op)
 	}
 
 	if err != nil {
@@ -310,6 +309,37 @@ func (r *TenantReconciler) reconcileDB(tenant *operatorsv1alpha1.Tenant) (ctrl.R
 	}
 
 	r.recorder.Event(tenant, corev1.EventTypeNormal, "Reconciliation status changed", "Reconciling tenant database finished")
+	return ctrl.Result{}, nil
+}
+
+func (r *TenantReconciler) reconcileFinalizers(tenant *operatorsv1alpha1.Tenant) (ctrl.Result, error) {
+	// Add finalizer to pre-delete database and user for a tenant
+	// https://book.kubebuilder.io/reference/using-finalizers.html
+
+	// name of our custom finalizer
+	dbFinalizer := "database.finalizers.jdwl.in"
+
+	// examine DeletionTimestamp to determine if object is under deletion
+	if tenant.ObjectMeta.DeletionTimestamp.IsZero() {
+		// The object is not being deleted, so if it does not have our finalizer,
+		// then lets add the finalizer and update the object. This is equivalent
+		// registering our finalizer.
+		controllerutil.AddFinalizer(tenant, dbFinalizer)
+	} else {
+		// The object is being deleted
+		if controllerutil.ContainsFinalizer(tenant, dbFinalizer) {
+			// our finalizer is present, so lets handle any external dependency
+			if err := r.deleteExternalResources(*tenant); err != nil {
+				// if fail to delete the external dependency here, return with error
+				// so that it can be retried
+				return ctrl.Result{}, err
+			}
+
+			// remove our finalizer from the list and update it.
+			controllerutil.RemoveFinalizer(tenant, dbFinalizer)
+		}
+	}
+
 	return ctrl.Result{}, nil
 }
 

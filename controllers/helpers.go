@@ -250,45 +250,6 @@ func (r *TenantReconciler) createDB(tenant operatorsv1alpha1.Tenant) error {
 	return nil
 }
 
-func (r *TenantReconciler) reconcileFinalizers(tenant *operatorsv1alpha1.Tenant) (ctrl.Result, error) {
-	// Add finalizer to pre-delete database and user for a tenant
-	// https://book.kubebuilder.io/reference/using-finalizers.html
-	// name of our custom finalizer
-	myFinalizerName := "database.finalizers.jdwl.in"
-
-	// examine DeletionTimestamp to determine if object is under deletion
-	if tenant.ObjectMeta.DeletionTimestamp.IsZero() {
-		// The object is not being deleted, so if it does not have our finalizer,
-		// then lets add the finalizer and update the object. This is equivalent
-		// registering our finalizer.
-		if !containsString(tenant.ObjectMeta.Finalizers, myFinalizerName) {
-			tenant.ObjectMeta.Finalizers = append(tenant.ObjectMeta.Finalizers, myFinalizerName)
-			fmt.Println(tenant)
-			if err := r.Update(context.Background(), tenant); err != nil {
-				return ctrl.Result{}, err
-			}
-		}
-	} else {
-		// The object is being deleted
-		if containsString(tenant.ObjectMeta.Finalizers, myFinalizerName) {
-			// our finalizer is present, so lets handle any external dependency
-			if err := r.deleteExternalResources(*tenant); err != nil {
-				// if fail to delete the external dependency here, return with error
-				// so that it can be retried
-				return ctrl.Result{}, err
-			}
-
-			// remove our finalizer from the list and update it.
-			tenant.ObjectMeta.Finalizers = removeString(tenant.ObjectMeta.Finalizers, myFinalizerName)
-			if err := r.Update(context.Background(), tenant); err != nil {
-				return ctrl.Result{}, err
-			}
-		}
-	}
-
-	return ctrl.Result{}, nil
-}
-
 func (r *TenantReconciler) createOrUpdateUser(tenant operatorsv1alpha1.Tenant, password string) {
 	log := r.Log.WithValues("tenant", tenant.Namespace)
 	log.Info("reconciling database user")
@@ -335,26 +296,6 @@ func renderTemplate(tpl string, data interface{}) string {
 	yamlContent := buf.String()
 
 	return yamlContent
-}
-
-// Helper functions to check and remove string from a slice of strings.
-func containsString(slice []string, s string) bool {
-	for _, item := range slice {
-		if item == s {
-			return true
-		}
-	}
-	return false
-}
-
-func removeString(slice []string, s string) (result []string) {
-	for _, item := range slice {
-		if item == s {
-			continue
-		}
-		result = append(result, item)
-	}
-	return
 }
 
 func check(err error) {

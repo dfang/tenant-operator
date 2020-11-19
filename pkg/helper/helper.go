@@ -105,16 +105,12 @@ func CreateNamespaceIfNotExist(nsName string) error {
 func DeleteNamespaceIfExist(nsName string) error {
 	// query namespace by name, if not exist, create it
 	ns := &corev1.Namespace{}
-	err := GetClientOrDie().Get(context.Background(), client.ObjectKey{
-		Name: nsName,
-	}, ns)
+	if err := GetClientOrDie().Get(context.Background(), client.ObjectKey{Name: nsName}, ns); err != nil {
+		return err
+	}
 
-	if err != nil {
-		ns.Name = nsName
-		if err := GetClientOrDie().Delete(context.Background(), ns); err != nil {
-			return err
-		}
-		fmt.Println("namespace deleted")
+	if err := GetClientOrDie().Delete(context.Background(), ns); err != nil {
+		return err
 	}
 
 	return nil
