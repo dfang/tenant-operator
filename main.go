@@ -69,14 +69,20 @@ func main() {
 	conn := helper.GetConn(host, port, user, password, dbname)
 
 	var metricsAddr string
+	var logLevel int
 	var enableLeaderElection bool
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
+	flag.IntVar(&logLevel, "V", 0, "Log Level (from -1 -> 5), defaut: info(0), for more, https://pkg.go.dev/go.uber.org/zap/zapcore#Level")
 	flag.Parse()
 
-	ctrl.SetLogger(zap.New(zap.UseDevMode(true), zap.Level(zapcore.DebugLevel)))
+	var level zapcore.Level
+	if logLevel >= -1 && logLevel <= 5 {
+		level = zapcore.Level(int8(logLevel))
+	}
+	ctrl.SetLogger(zap.New(zap.UseDevMode(true), zap.Level(level)))
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:             scheme,
