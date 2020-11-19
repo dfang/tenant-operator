@@ -12,11 +12,14 @@ else
 GOBIN=$(shell go env GOBIN)
 endif
 
-all: manager
+all: tenant manager
 
 # Run tests
 test: generate fmt vet manifests
 	go test ./... -coverprofile cover.out
+
+tenant:
+	go build -o bin/tenant cmd/main.go
 
 # Build manager binary
 manager: generate fmt vet
@@ -58,10 +61,6 @@ sample:
 # Generate code
 generate: controller-gen
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
-
-build:
-	go build -o bin/tenant cmd/main.go
-	go build -o bin/manager ./main.go
 
 # Build the docker image
 docker-build: test
