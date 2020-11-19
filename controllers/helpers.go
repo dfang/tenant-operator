@@ -17,7 +17,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
-func (r *TenantReconciler) desiredDeployment(tenant *operatorsv1alpha1.Tenant) (appsv1.Deployment, error) {
+func (r *TenantReconciler) desiredDeployment(tenant operatorsv1alpha1.Tenant) (appsv1.Deployment, error) {
 	log := r.Log.WithValues("tenant", tenant.Namespace)
 
 	log.Info("reconciling deployment")
@@ -103,18 +103,15 @@ func (r *TenantReconciler) desiredDeployment(tenant *operatorsv1alpha1.Tenant) (
 		},
 	}
 
-	if err := ctrl.SetControllerReference(tenant, &depl, r.Scheme); err != nil {
+	if err := ctrl.SetControllerReference(&tenant, &depl, r.Scheme); err != nil {
 		return depl, err
 	}
-
-	log.Info("reconciled deployment")
 
 	return depl, nil
 }
 
 func (r *TenantReconciler) desiredService(tenant operatorsv1alpha1.Tenant) (corev1.Service, error) {
 	log := r.Log.WithValues("tenant", tenant.Namespace)
-
 	log.Info("reconciling service")
 
 	svc := corev1.Service{
@@ -137,8 +134,6 @@ func (r *TenantReconciler) desiredService(tenant operatorsv1alpha1.Tenant) (core
 		return svc, err
 	}
 
-	log.Info("reconciled service")
-
 	return svc, nil
 }
 
@@ -155,7 +150,7 @@ func (r *TenantReconciler) desiredIngressRoute(tenant operatorsv1alpha1.Tenant) 
 		Host        string
 		ServiceName string
 	}{
-		Name:        tenant.Spec.UUID,
+		Name:        tenant.Spec.CName,
 		Namespace:   tenant.Spec.CName,
 		ServiceName: tenant.Spec.CName,
 		Host:        fmt.Sprintf("%s.jdwl.in", tenant.Spec.CName),
@@ -169,8 +164,6 @@ func (r *TenantReconciler) desiredIngressRoute(tenant operatorsv1alpha1.Tenant) 
 	}
 
 	// don't forget to set owner reference, otherwise infinite reconcile loop
-
-	log.Info("reconciled ingressRoute")
 
 	return nil
 }
@@ -193,52 +186,12 @@ func (r *TenantReconciler) desiredConfigmap(tenant operatorsv1alpha1.Tenant) err
 		panic(err.Error())
 	}
 
-	log.Info("reconciled configmap")
-
 	return nil
-}
-
-func (r *TenantReconciler) desiredSecret(tenant operatorsv1alpha1.Tenant, password string) (corev1.Secret, error) {
-	log := r.Log.WithValues("tenant", tenant.Namespace)
-	log.Info("reconciling secret")
-
-	data := make(map[string]string)
-	data["DBPassword"] = password
-
-	sec := corev1.Secret{
-		TypeMeta: metav1.TypeMeta{APIVersion: corev1.SchemeGroupVersion.String(), Kind: "Secret"},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "db-secret",
-			Namespace: tenant.Namespace,
-		},
-		StringData: data,
-		Type:       "generic",
-	}
-	if err := ctrl.SetControllerReference(&tenant, &sec, r.Scheme); err != nil {
-		return sec, err
-	}
-	log.Info("reconciled secret")
-
-	r.createOrUpdateUser(tenant, password)
-
-	return sec, nil
-}
-
-// https://github.com/kubernetes/apimachinery/issues/109
-// can't server side apply two resource in one yaml
-func (r *TenantReconciler) reconcileRedis(tenant *operatorsv1alpha1.Tenant) (ctrl.Result, error) {
-	if r, err := r.reconcileRedisDeployment(tenant); err != nil {
-		return r, err
-	}
-	if r, err := r.reconcileRedisSvc(tenant); err != nil {
-		return r, err
-	}
-	return ctrl.Result{}, nil
 }
 
 func (r *TenantReconciler) reconcileRedisDeployment(tenant *operatorsv1alpha1.Tenant) (ctrl.Result, error) {
 	log := r.Log.WithValues("tenant", tenant.Namespace)
-	log.Info("reconciling redis")
+	log.Info("reconciling redis deployment")
 	config := ctrl.GetConfigOrDie()
 
 	data := struct {
@@ -249,8 +202,6 @@ func (r *TenantReconciler) reconcileRedisDeployment(tenant *operatorsv1alpha1.Te
 
 	yamlContent := renderTemplate("/controllers/templates/redis-deploy.yaml", data)
 
-	fmt.Println(yamlContent)
-
 	_, err := helper.DoSSA(context.Background(), config, yamlContent)
 	if err != nil {
 		log.Info("err when doSSA: ", err)
@@ -258,14 +209,12 @@ func (r *TenantReconciler) reconcileRedisDeployment(tenant *operatorsv1alpha1.Te
 	}
 
 	// don't forget to set owner reference, otherwise infinite reconcile loop
-	log.Info("reconciled redis")
-
 	return ctrl.Result{}, nil
 }
 
 func (r *TenantReconciler) reconcileRedisSvc(tenant *operatorsv1alpha1.Tenant) (ctrl.Result, error) {
 	log := r.Log.WithValues("tenant", tenant.Namespace)
-	log.Info("reconciling redis")
+	log.Info("reconciling redis service")
 	config := ctrl.GetConfigOrDie()
 
 	data := struct {
@@ -276,8 +225,6 @@ func (r *TenantReconciler) reconcileRedisSvc(tenant *operatorsv1alpha1.Tenant) (
 
 	yamlContent := renderTemplate("/controllers/templates/redis-svc.yaml", data)
 
-	fmt.Println(yamlContent)
-
 	_, err := helper.DoSSA(context.Background(), config, yamlContent)
 	if err != nil {
 		log.Info("err when doSSA: ", err)
@@ -285,14 +232,13 @@ func (r *TenantReconciler) reconcileRedisSvc(tenant *operatorsv1alpha1.Tenant) (
 	}
 
 	// don't forget to set owner reference, otherwise infinite reconcile loop
-	log.Info("reconciled redis")
 
 	return ctrl.Result{}, nil
 }
 
 func (r *TenantReconciler) createDB(tenant operatorsv1alpha1.Tenant) error {
-	log := r.Log.WithValues("tenant", tenant.Namespace)
-	log.Info("reconciling database")
+	// log := r.Log.WithValues("tenant", tenant.Namespace)
+	// log.Info("reconciling database")
 
 	db := r.DBConn
 	// defer db.Close()
@@ -362,17 +308,14 @@ func (r *TenantReconciler) createOrUpdateUser(tenant operatorsv1alpha1.Tenant, p
 	log.Info("reconciling database user")
 
 	db := r.DBConn
-	db.Ping()
 
 	// defer db.Close()
 	stmt := fmt.Sprintf(`CREATE USER "%s" WITH PASSWORD '%s';`, tenant.Spec.CName, password)
-	log.Info(stmt)
 
 	_, err := db.Exec(stmt)
 	if err != nil {
 		stmt := fmt.Sprintf(`ALTER USER "%s" WITH PASSWORD '%s';`, tenant.Spec.CName, password)
 		_, err = db.Exec(stmt)
-		fmt.Println(err)
 	} else {
 		fmt.Println("Successfully created/updated database user ...")
 	}

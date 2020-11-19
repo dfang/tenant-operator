@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/heptiolabs/healthcheck"
+	"go.uber.org/zap/zapcore"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
@@ -75,7 +76,7 @@ func main() {
 			"Enabling this will ensure there is only one active controller manager.")
 	flag.Parse()
 
-	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
+	ctrl.SetLogger(zap.New(zap.UseDevMode(true), zap.Level(zapcore.DebugLevel)))
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:             scheme,
@@ -89,15 +90,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	// log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout})
-
 	port := envOrDefault("PORT", "9876")
 	go StartWebhookd(port)
 	go StartHealthCheck(port)
 
 	if err = (&controllers.TenantReconciler{
 		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("Tenant"),
+		Log:    ctrl.Log.WithName("controllers").WithName("Tenant").V(3),
 		Scheme: mgr.GetScheme(),
 
 		// DBConn DB Connection

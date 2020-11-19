@@ -20,10 +20,12 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
+	"time"
 
 	operatorsv1alpha1 "github.com/dfang/tenant-operator/api/v1alpha1"
+	"github.com/dfang/tenant-operator/pkg/helper"
 	"github.com/go-logr/logr"
+	_ "github.com/lib/pq"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,10 +33,6 @@ import (
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	"github.com/dfang/tenant-operator/pkg/helper"
-
-	_ "github.com/lib/pq"
 )
 
 // TenantReconciler reconciles a Tenant object
@@ -60,97 +58,69 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	// Fetch the tenant from the cache
 	tenant := &operatorsv1alpha1.Tenant{}
 	if err := r.Client.Get(context.TODO(), req.NamespacedName, tenant); err != nil {
+		log.Error(err, "failed to get tenant from cache")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	// Set the label if it is missing
-	if tenant.Labels == nil {
-		tenant.Labels = map[string]string{}
-	}
-
-	tenant.Labels["hello"] = "world"
-
-	log.Info(tenant.Spec.UUID)
-	log.Info(tenant.Spec.CName)
-
-	log.Info("Reconcile FINALIZERS")
-	if result, err := r.reconcileFinalizers(tenant); err != nil {
-		return result, err
-	}
-
-	// goal: get namespace status, if it's been terminating, just return, no more reconciling
-	clientset := helper.GetClientSet()
-	ns, err := clientset.CoreV1().Namespaces().Get(context.TODO(), tenant.Namespace, metav1.GetOptions{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: corev1.SchemeGroupVersion.String(), Kind: "Namespace",
-		},
-	})
-
-	if ns.Status.Phase == corev1.NamespaceTerminating {
-		return ctrl.Result{}, nil
-	}
-
-	log.Info("tenant", "replicas count: ", tenant.Spec.Replicas)
-
-	// // kubectl describe tenant
-	// r.recorder.Event(tenant, corev1.EventTypeNormal, "Reconciled", "Reconciling tenant start")
-
-	// // if replicas = 0, set namespace to sleep mode
-	// // if tenant.Spec.Replicas == 0 {
-	// _ = r.scaleNamespace(tenant.Namespace, int(tenant.Spec.Replicas))
-	// // return ctrl.Result{}, nil
-	// // }
-
-	// your logic here
-	log.Info("reconciling tenant")
-
 	if result, err := r.reconcileDB(tenant); err != nil {
+		log.Error(err, "failed to reconcile db")
 		return result, err
 	}
 
 	if result, err := r.reconcileSecret(tenant); err != nil {
+		log.Error(err, "failed to reconcile secret")
 		return result, err
 	}
 
 	if result, err := r.reconcileConfigmap(tenant); err != nil {
+		log.Error(err, "failed to reconcile configmap")
 		return result, err
 	}
 
 	if result, err := r.reconcileIngressRoute(tenant); err != nil {
+		log.Error(err, "failed to reconcile ingressRoute")
 		return result, err
 	}
 
-	if result, err := r.reconcileDeployment(tenant); err != nil {
+	if result, err := r.reconcileRedis(tenant); err != nil {
+		log.Error(err, "failed to reconcile redis")
 		return result, err
 	}
 
 	if result, err := r.reconcileService(tenant); err != nil {
+		log.Error(err, "failed to reconcile service")
 		return result, err
 	}
 
-	_, err = r.updateStatus(tenant)
-	if err != nil {
-		return ctrl.Result{}, err
+	if _, err := r.reconcileDeployment(tenant); err != nil {
+		log.Error(err, "failed to reconcile deployment")
+		return ctrl.Result{RequeueAfter: 30 * time.Second}, err
+	}
+
+	if result, err := r.updateStatus(tenant); err != nil {
+		log.Error(err, "failed to update tenant status")
+		return result, err
 	}
 
 	// https://book-v1.book.kubebuilder.io/beyond_basics/creating_events.html
 	r.recorder.Event(tenant, corev1.EventTypeNormal, "Reconciliation succeed", "Reconciling tenant succeed")
-	log.Info("reconciled tenant")
 
 	return ctrl.Result{}, nil
 }
 
 func (r *TenantReconciler) reconcileDeployment(tenant *operatorsv1alpha1.Tenant) (ctrl.Result, error) {
-	applyOpts := []client.PatchOption{client.ForceOwnership, client.FieldOwner("tenant-controller")}
-	deployment, err := r.desiredDeployment(tenant)
+	// applyOpts := []client.PatchOption{client.ForceOwnership, client.FieldOwner("tenant-controller")}
+	deployment, err := r.desiredDeployment(*tenant)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	err = r.Patch(context.TODO(), &deployment, client.Apply, applyOpts...)
+	// err = r.Client.Patch(context.TODO(), &deployment, client.Apply, applyOpts...)
+	err = r.Client.Patch(context.TODO(), &deployment, client.MergeFrom(&deployment), &client.PatchOptions{FieldManager: "tenant-controller"})
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	r.recorder.Event(tenant, corev1.EventTypeNormal, "Reconciliation started", "Reconciling deployment finished")
+
+	// r.recorder.Event(tenant, corev1.EventTypeNormal, "Reconciliation started", "Reconciling deployment finished")
 
 	return ctrl.Result{}, nil
 }
@@ -165,7 +135,7 @@ func (r *TenantReconciler) reconcileService(tenant *operatorsv1alpha1.Tenant) (c
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	r.recorder.Event(tenant, corev1.EventTypeNormal, "Reconciliation status changed", "Reconciling service finished")
+	// r.recorder.Event(tenant, corev1.EventTypeNormal, "Reconciliation status changed", "Reconciling service finished")
 
 	return ctrl.Result{}, nil
 }
@@ -192,30 +162,78 @@ func (r *TenantReconciler) reconcileIngressRoute(tenant *operatorsv1alpha1.Tenan
 	return ctrl.Result{}, nil
 }
 
-func (r *TenantReconciler) reconcileSecret(tenant *operatorsv1alpha1.Tenant) (ctrl.Result, error) {
-	password := helper.GenRandPassword(12)
-	applyOpts := []client.PatchOption{client.ForceOwnership, client.FieldOwner("tenant-controller")}
-	// r.createUser(*tenant, pwd)
-	secret, err := r.desiredSecret(*tenant, password)
-	if err != nil {
-		return ctrl.Result{}, err
+// https://github.com/kubernetes/apimachinery/issues/109
+// can't server side apply two resource in one yaml
+func (r *TenantReconciler) reconcileRedis(tenant *operatorsv1alpha1.Tenant) (ctrl.Result, error) {
+	if r, err := r.reconcileRedisDeployment(tenant); err != nil {
+		return r, err
 	}
-	err = r.Patch(context.TODO(), &secret, client.Apply, applyOpts...)
-	if err != nil {
-		return ctrl.Result{}, err
+
+	if r, err := r.reconcileRedisSvc(tenant); err != nil {
+		return r, err
 	}
-	r.recorder.Event(tenant, corev1.EventTypeNormal, "Reconciliation status changed", "Reconciling secret finished")
+
+	r.recorder.Event(tenant, corev1.EventTypeNormal, "Reconciliation status changed", "Reconciling redis finished")
 
 	return ctrl.Result{}, nil
 }
 
+func (r *TenantReconciler) reconcileSecret(tenant *operatorsv1alpha1.Tenant) (ctrl.Result, error) {
+	password := helper.GenRandPassword(12)
+	applyOpts := []client.PatchOption{client.ForceOwnership, client.FieldOwner("tenant-controller")}
+	// applyOpts := []client.UpdateOption{
+	//   FieldManager
+	// }
+	//   client.ForceOwnership, client.FieldOwner("tenant-controller")}
+	// secret, err := r.desiredSecret(*tenant, password)
+	data := make(map[string]string)
+	data["DBPassword"] = password
+
+	secretName := client.ObjectKey{
+		Name:      "db-secret",
+		Namespace: tenant.Namespace,
+	}
+	existingSecret := &corev1.Secret{}
+	err := helper.GetClientOrDie().Get(context.Background(), secretName, existingSecret)
+
+	if err != nil {
+		existingSecret.Type = "generic"
+		existingSecret.StringData = data
+		existingSecret.TypeMeta = metav1.TypeMeta{
+			APIVersion: corev1.SchemeGroupVersion.String(),
+			Kind:       "Secret",
+		}
+		existingSecret.ObjectMeta = metav1.ObjectMeta{
+			Name:      "db-secret",
+			Namespace: tenant.Namespace,
+		}
+
+		if err := ctrl.SetControllerReference(tenant, existingSecret, r.Scheme); err != nil {
+			return ctrl.Result{}, err
+		}
+
+		r.createOrUpdateUser(*tenant, password)
+		err = r.Patch(context.TODO(), existingSecret, client.Apply, applyOpts...)
+		if err != nil {
+			fmt.Println("Patch")
+			return ctrl.Result{}, err
+		}
+	}
+
+	r.recorder.Event(tenant, corev1.EventTypeNormal, "Reconciliation status changed", "Reconciling secret finished")
+	return ctrl.Result{}, nil
+}
+
 func (r *TenantReconciler) reconcileDB(tenant *operatorsv1alpha1.Tenant) (ctrl.Result, error) {
-	// log.Info("reconciling database and user")
+	log := r.Log
+	log.Info("reconciling database")
+
 	err := r.createDB(*tenant)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
+	r.recorder.Event(tenant, corev1.EventTypeNormal, "Reconciliation status changed", "Reconciling tenant database finished")
 	return ctrl.Result{}, nil
 }
 
@@ -236,6 +254,7 @@ func (r *TenantReconciler) updateStatus(tenant *operatorsv1alpha1.Tenant) (ctrl.
 		return ctrl.Result{}, err
 	}
 
+	r.recorder.Event(tenant, corev1.EventTypeNormal, "Reconciliation status changed", "Reconciling update status finished")
 	return ctrl.Result{}, nil
 }
 
@@ -260,7 +279,8 @@ func (r *TenantReconciler) scaleNamespace(ns string, replicas int) error {
 			Deployments(item.Namespace).
 			GetScale(context.TODO(), item.Name, metav1.GetOptions{})
 		if err != nil {
-			log.Fatal(err)
+			// log.Fatal(err)
+			fmt.Println(err)
 		}
 		sc.Spec.Replicas = int32(replicas)
 
