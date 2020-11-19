@@ -61,6 +61,7 @@ generate: controller-gen
 
 build:
 	go build -o bin/tenant cmd/main.go
+	go build -o bin/manager ./main.go
 
 # Build the docker image
 docker-build: test
