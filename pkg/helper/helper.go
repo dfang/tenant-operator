@@ -9,6 +9,8 @@ import (
 	"os"
 	"time"
 
+	operatorsv1alpha1 "github.com/dfang/tenant-operator/api/v1alpha1"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -247,4 +249,55 @@ func DropUser(db *sql.DB, userName string) {
 	} else {
 		fmt.Println("Successfully dropped user..")
 	}
+}
+
+// CreateTenant create a tenant when received a hasura insert event
+func CreateTenant(name, namespace, uuid string) error {
+	// log.Info().Msgf("Create namespace %s", t.CName)
+
+	// t1 := &unstructured.Unstructured{}
+	// t1.SetGroupVersionKind(schema.GroupVersionKind{
+	// 	Group:   operatorsv1alpha1.GroupVersion.Group,
+	// 	Version: operatorsv1alpha1.GroupVersion.Version,
+	// 	Kind:    "Tenant",
+	// })
+
+	// create a tenant CR
+	// apiVersion: operators.jdwl.in/v1alpha1
+	// kind: Tenant
+	// metadata:
+	//   name: {{ .CName }}
+	//   namespace: {{ .CName }}
+	// spec:
+	//   cname: {{ .CName }}
+	//   replicas: 1
+	//   uuid: {{ .UUID }}
+
+	err := CreateNamespaceIfNotExist(namespace)
+	if err != nil {
+		panic(err)
+	}
+
+	var t1 operatorsv1alpha1.Tenant
+	t1.TypeMeta = metav1.TypeMeta{
+		APIVersion: operatorsv1alpha1.GroupVersion.String(),
+		Kind:       "Tenant",
+	}
+	t1.ObjectMeta = metav1.ObjectMeta{
+		Name:      name,
+		Namespace: namespace,
+	}
+	t1.Spec = operatorsv1alpha1.TenantSpec{
+		UUID:     uuid,
+		CName:    name,
+		Replicas: 1,
+	}
+
+	cl := GetClientOrDie()
+	if err = cl.Create(context.TODO(), &t1); err != nil {
+		return nil
+	}
+	// Create(ctx context.Context, obj runtime.Object, opts ...CreateOption) error
+
+	return nil
 }

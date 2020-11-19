@@ -368,7 +368,9 @@ func deleteTenant(kv *api.KV, c *cli.Context) error {
 		return nil
 	}
 
-	_ = helper.DeleteNamespaceIfExist(string(cname.Value))
+	if err = helper.DeleteNamespaceIfExist(string(cname.Value)); err != nil {
+		log.Panic(err)
+	}
 
 	_, err = kv.DeleteTree("tenants/"+uuid+"/", nil)
 	fmt.Println("delete key", "tenants/"+uuid)

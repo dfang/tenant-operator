@@ -1,0 +1,18 @@
+TODOS:
+
+1. add test
+https://godoc.org/sigs.k8s.io/controller-runtime/pkg/controller/controllertest
+
+
+2. mutating webhook
+
+3. metrics
+
+
+v1/ConfigMap or appsv1/Deployment
+v1/Secret
+v1/Pod
+
+4. manager health check
+AddHealthzCheck
+AddReadyzCheck

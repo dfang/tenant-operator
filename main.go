@@ -17,13 +17,10 @@ limitations under the License.
 package main
 
 import (
-	"bytes"
-	"context"
 	"database/sql"
 	"encoding/json"
 	"flag"
 	"fmt"
-	"html/template"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -106,7 +103,6 @@ func main() {
 		Client: mgr.GetClient(),
 		Log:    ctrl.Log.WithName("controllers").WithName("Tenant").V(3),
 		Scheme: mgr.GetScheme(),
-
 		// DBConn DB Connection
 		DBConn: conn,
 		// Tenant Domain
@@ -123,7 +119,6 @@ func main() {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
-
 }
 
 // StartHealthCheck start webhookd
@@ -180,7 +175,7 @@ func InsertEventHandler(w http.ResponseWriter, r *http.Request) {
 		// log.Info().Msgf("uuid: %s", t.UUID)
 		// log.Info().Msgf("cname: %s", t.CName)
 
-		CreateTenant(t)
+		_ = helper.CreateTenant(t.CName, t.CName, t.UUID)
 
 		// log.Info().Msgf("created tenant %s with uuid: %s", t.CName, t.UUID)
 
@@ -236,49 +231,8 @@ func fail(err error) {
 }
 
 // T Tenant
+// the name and namespace are CName, they are the same
 type T struct {
 	CName string
 	UUID  string
-}
-
-// CreateTenant create a tenant when received a hasura insert event
-func CreateTenant(t T) error {
-	tenantTpl := `
-apiVersion: operators.jdwl.in/v1alpha1
-kind: Tenant
-metadata:
-  name: {{ .CName }}
-  namespace: {{ .CName }}
-spec:
-  cname: {{ .CName }}
-  replicas: 1
-  uuid: {{ .UUID }}
-`
-
-	// log.Info().Msgf("Create namespace %s", t.CName)
-	err := helper.CreateNamespaceIfNotExist(t.CName)
-	if err != nil {
-		panic(err)
-	}
-
-	// log.Info().Msgf("Create tenant %s in namspace %s", t.CName, t.CName)
-	tpl, err := template.New("tenant").Parse(tenantTpl)
-	if err != nil {
-		panic(err)
-	}
-
-	buf := new(bytes.Buffer)
-	// Execute(io.Writer(出力先), <データ>)
-	if err = tpl.Execute(buf, t); err != nil {
-		panic(err)
-	}
-	yamlContent := buf.String()
-	config := ctrl.GetConfigOrDie()
-
-	_, err = helper.DoSSA(context.Background(), config, yamlContent)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	return nil
 }

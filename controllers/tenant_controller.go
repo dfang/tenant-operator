@@ -20,6 +20,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
 	"time"
 
 	operatorsv1alpha1 "github.com/dfang/tenant-operator/api/v1alpha1"
@@ -30,9 +31,11 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/serializer/json"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 // TenantReconciler reconciles a Tenant object
@@ -54,13 +57,32 @@ type TenantReconciler struct {
 
 // Reconcile Reconcile Tenant
 func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	log := r.Log.WithValues("tenant", req)
+	log := r.Log.WithValues("tenant", req.Namespace)
 
 	// Fetch the tenant from the cache
 	tenant := &operatorsv1alpha1.Tenant{}
 	if err := r.Client.Get(context.TODO(), req.NamespacedName, tenant); err != nil {
 		log.Error(err, "failed to get tenant from cache")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	if result, err := r.reconcileFinalizers(tenant); err != nil {
+		log.Error(err, "failed to reconcile finalizers")
+		return result, err
+	}
+
+	// goal: get namespace status
+	// if it's been terminating, just return, no more reconciling
+	// that means if namespace is been terminating, no need to concile deploy,svc etc
+	clientset := helper.GetClientSet()
+	ns, _ := clientset.CoreV1().Namespaces().Get(context.TODO(), tenant.Namespace, metav1.GetOptions{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: corev1.SchemeGroupVersion.String(), Kind: "Namespace",
+		},
+	})
+
+	if ns.Status.Phase == corev1.NamespaceTerminating {
+		return ctrl.Result{}, nil
 	}
 
 	if result, err := r.reconcileDB(tenant); err != nil {
@@ -83,11 +105,6 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return result, err
 	}
 
-	if result, err := r.reconcileRedis(tenant); err != nil {
-		log.Error(err, "failed to reconcile redis")
-		return result, err
-	}
-
 	if result, err := r.reconcileService(tenant); err != nil {
 		log.Error(err, "failed to reconcile service")
 		return result, err
@@ -98,6 +115,11 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, err
 	}
 
+	if result, err := r.reconcileRedis(tenant); err != nil {
+		log.Error(err, "failed to reconcile redis")
+		return result, err
+	}
+
 	if result, err := r.updateStatus(tenant); err != nil {
 		log.Error(err, "failed to update tenant status")
 		return result, err
@@ -106,27 +128,70 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	// https://book-v1.book.kubebuilder.io/beyond_basics/creating_events.html
 	r.recorder.Event(tenant, corev1.EventTypeNormal, "Reconciliation succeed", "Reconciling tenant succeed")
 
+	log.Info("reconciliation done !!!")
 	return ctrl.Result{}, nil
 }
 
 func (r *TenantReconciler) reconcileDeployment(tenant *operatorsv1alpha1.Tenant) (ctrl.Result, error) {
+	log := r.Log.WithValues("tenant", tenant.Namespace)
+	log.Info("reconciling qox deployment")
+
+	deploy, err := r.desiredDeployment(*tenant)
+	ysz := json.NewYAMLSerializer(json.DefaultMetaFactory, nil, nil)
+	if err = ysz.Encode(&deploy, os.Stdout); err != nil {
+		panic(err)
+	}
+
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// Note: use controller runtime MergeFrom here to avoid no-idempotency problem
+	// https://github.com/kubernetes-sigs/controller-runtime/blob/master/pkg/client/patch.go
+	// for more see question asked in slack #kubebuilder channel
+	// https://stackoverflow.com/questions/57712941/what-is-the-proper-way-to-patch-an-object-with-controller-runtime
+
+	// option 1 has reconcile dead loop problem
+	// option 2 has problem when creating deployment, if deploy is there it's ok
+	// option 3 is so far so good
+
+	// option 1
 	// applyOpts := []client.PatchOption{client.ForceOwnership, client.FieldOwner("tenant-controller")}
-	deployment, err := r.desiredDeployment(*tenant)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
 	// err = r.Client.Patch(context.TODO(), &deployment, client.Apply, applyOpts...)
-	err = r.Client.Patch(context.TODO(), &deployment, client.MergeFrom(&deployment), &client.PatchOptions{FieldManager: "tenant-controller"})
+
+	// option 2
+	// err = r.Client.Patch(context.TODO(), &deployment, client.MergeFrom(&deployment), &client.PatchOptions{FieldManager: "tenant-controller"})
+
+	// option 3
+	op, err := controllerutil.CreateOrUpdate(context.TODO(), r.Client, &deploy, func() error {
+		// Deployment selector is immutable so we set this value only if
+		// a new object is going to be created
+		if deploy.ObjectMeta.CreationTimestamp.IsZero() {
+			deploy.Spec.Selector = &metav1.LabelSelector{
+				MatchLabels: map[string]string{"tenant": tenant.Name},
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		log.Error(err, "Deployment reconcile failed")
+	} else {
+		log.Info("Deployment successfully reconciled", "operation", op)
+	}
+
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-
-	// r.recorder.Event(tenant, corev1.EventTypeNormal, "Reconciliation started", "Reconciling deployment finished")
-
+	r.recorder.Event(tenant, corev1.EventTypeNormal, "Reconciliation started", "Reconciling deployment finished")
 	return ctrl.Result{}, nil
 }
 
 func (r *TenantReconciler) reconcileService(tenant *operatorsv1alpha1.Tenant) (ctrl.Result, error) {
+	log := r.Log.WithValues("tenant", tenant.Namespace)
+	log.Info("reconciling qox service")
+
 	applyOpts := []client.PatchOption{client.ForceOwnership, client.FieldOwner("tenant-controller")}
 	svc, err := r.desiredService(*tenant)
 	if err != nil {
@@ -142,6 +207,9 @@ func (r *TenantReconciler) reconcileService(tenant *operatorsv1alpha1.Tenant) (c
 }
 
 func (r *TenantReconciler) reconcileConfigmap(tenant *operatorsv1alpha1.Tenant) (ctrl.Result, error) {
+	log := r.Log.WithValues("tenant", tenant.Namespace)
+	log.Info("reconciling qox configmap")
+
 	// server side apply generated yaml
 	err := r.desiredConfigmap(*tenant)
 	if err != nil {
@@ -153,6 +221,9 @@ func (r *TenantReconciler) reconcileConfigmap(tenant *operatorsv1alpha1.Tenant) 
 }
 
 func (r *TenantReconciler) reconcileIngressRoute(tenant *operatorsv1alpha1.Tenant) (ctrl.Result, error) {
+	log := r.Log.WithValues("tenant", tenant.Namespace)
+	log.Info("reconciling qox ingressRoute")
+
 	// server side apply generated yaml
 	err := r.desiredIngressRoute(*tenant)
 	if err != nil {
@@ -164,7 +235,8 @@ func (r *TenantReconciler) reconcileIngressRoute(tenant *operatorsv1alpha1.Tenan
 }
 
 // https://github.com/kubernetes/apimachinery/issues/109
-// can't server side apply two resource in one yaml
+// note: currently you can't server side apply two resource in one yaml
+// server side apply is still beta in k8s 1.18
 func (r *TenantReconciler) reconcileRedis(tenant *operatorsv1alpha1.Tenant) (ctrl.Result, error) {
 	if r, err := r.reconcileRedisDeployment(tenant); err != nil {
 		return r, err
@@ -180,6 +252,9 @@ func (r *TenantReconciler) reconcileRedis(tenant *operatorsv1alpha1.Tenant) (ctr
 }
 
 func (r *TenantReconciler) reconcileSecret(tenant *operatorsv1alpha1.Tenant) (ctrl.Result, error) {
+	log := r.Log.WithValues("tenant", tenant.Namespace)
+	log.Info("reconciling qox secret")
+
 	password := helper.GenRandPassword(12)
 	applyOpts := []client.PatchOption{client.ForceOwnership, client.FieldOwner("tenant-controller")}
 	// applyOpts := []client.UpdateOption{
@@ -226,8 +301,8 @@ func (r *TenantReconciler) reconcileSecret(tenant *operatorsv1alpha1.Tenant) (ct
 }
 
 func (r *TenantReconciler) reconcileDB(tenant *operatorsv1alpha1.Tenant) (ctrl.Result, error) {
-	log := r.Log
-	log.Info("reconciling database")
+	log := r.Log.WithValues("tenant", tenant.Namespace)
+	log.Info("reconciling qox database")
 
 	err := r.createDB(*tenant)
 	if err != nil {
@@ -239,7 +314,10 @@ func (r *TenantReconciler) reconcileDB(tenant *operatorsv1alpha1.Tenant) (ctrl.R
 }
 
 func (r *TenantReconciler) updateStatus(tenant *operatorsv1alpha1.Tenant) (ctrl.Result, error) {
-	tenant.Status.URL = fmt.Sprintf("http://%s.jdwl.in", tenant.Spec.CName)
+	log := r.Log.WithValues("tenant", tenant.Namespace)
+	log.Info("update tenant status")
+
+	tenant.Status.URL = r.getTenantSubdomain(tenant.Spec.CName)
 	tenant.Status.Replicas = tenant.Spec.Replicas
 	tenant.Status.CName = tenant.Spec.CName
 

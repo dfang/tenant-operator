@@ -18,10 +18,6 @@ import (
 )
 
 func (r *TenantReconciler) desiredDeployment(tenant operatorsv1alpha1.Tenant) (appsv1.Deployment, error) {
-	log := r.Log.WithValues("tenant", tenant.Namespace)
-
-	log.Info("reconciling deployment")
-
 	depl := appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{APIVersion: appsv1.SchemeGroupVersion.String(), Kind: "Deployment"},
 		ObjectMeta: metav1.ObjectMeta{
@@ -29,7 +25,6 @@ func (r *TenantReconciler) desiredDeployment(tenant operatorsv1alpha1.Tenant) (a
 			Namespace: tenant.Namespace,
 		},
 		Spec: appsv1.DeploymentSpec{
-			// Replicas: tenant.Spec.Frontend.Replicas, // won't be nil because defaulting
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{"tenant": tenant.Name},
 			},
@@ -111,9 +106,6 @@ func (r *TenantReconciler) desiredDeployment(tenant operatorsv1alpha1.Tenant) (a
 }
 
 func (r *TenantReconciler) desiredService(tenant operatorsv1alpha1.Tenant) (corev1.Service, error) {
-	log := r.Log.WithValues("tenant", tenant.Namespace)
-	log.Info("reconciling service")
-
 	svc := corev1.Service{
 		TypeMeta: metav1.TypeMeta{APIVersion: corev1.SchemeGroupVersion.String(), Kind: "Service"},
 		ObjectMeta: metav1.ObjectMeta{
@@ -138,11 +130,7 @@ func (r *TenantReconciler) desiredService(tenant operatorsv1alpha1.Tenant) (core
 }
 
 func (r *TenantReconciler) desiredIngressRoute(tenant operatorsv1alpha1.Tenant) error {
-	log := r.Log.WithValues("tenant", tenant.Namespace)
-
 	config := ctrl.GetConfigOrDie()
-
-	log.Info("reconciling ingressRoute")
 
 	data := struct {
 		Name        string
@@ -168,14 +156,7 @@ func (r *TenantReconciler) desiredIngressRoute(tenant operatorsv1alpha1.Tenant) 
 	return nil
 }
 
-func (r *TenantReconciler) getTenantSubdomain(cname string) string {
-	return fmt.Sprintf("%s.%s", cname, r.Domain)
-}
-
 func (r *TenantReconciler) desiredConfigmap(tenant operatorsv1alpha1.Tenant) error {
-	log := r.Log.WithValues("tenant", tenant.Namespace)
-	log.Info("reconciling configmap")
-
 	config := ctrl.GetConfigOrDie()
 	data := struct {
 		Namespace string
@@ -196,6 +177,7 @@ func (r *TenantReconciler) desiredConfigmap(tenant operatorsv1alpha1.Tenant) err
 func (r *TenantReconciler) reconcileRedisDeployment(tenant *operatorsv1alpha1.Tenant) (ctrl.Result, error) {
 	log := r.Log.WithValues("tenant", tenant.Namespace)
 	log.Info("reconciling redis deployment")
+
 	config := ctrl.GetConfigOrDie()
 
 	data := struct {
@@ -441,4 +423,8 @@ func (r *TenantReconciler) dropUser(tenant operatorsv1alpha1.Tenant) error {
 
 	fmt.Println("Successfully dropped user..")
 	return nil
+}
+
+func (r *TenantReconciler) getTenantSubdomain(cname string) string {
+	return fmt.Sprintf("%s.%s", cname, r.Domain)
 }
