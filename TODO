@@ -3,6 +3,7 @@ TODOS:
 1. add test
 https://godoc.org/sigs.k8s.io/controller-runtime/pkg/controller/controllertest
 
+test reconciliation
 
 2. mutating webhook
 
@@ -16,3 +17,7 @@ v1/Pod
 4. manager health check
 AddHealthzCheck
 AddReadyzCheck
+
+5. dynamic log level
+https://dev.to/rusty_sys_dev/golang-dynamic-logging-3p7k
+

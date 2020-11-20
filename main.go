@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/heptiolabs/healthcheck"
+	uberzap "go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -45,6 +46,9 @@ var (
 	setupLog = ctrl.Log.WithName("setup")
 	// DBConn DB Connection
 	DBConn *sql.DB
+
+	logLevelEventHandler http.Handler
+	atom                 uberzap.AtomicLevel
 )
 
 var (
@@ -65,8 +69,6 @@ func init() {
 }
 
 func main() {
-	conn := helper.GetConn(host, port, user, password, dbname)
-
 	var metricsAddr string
 	var logLevel int
 	var enableLeaderElection bool
@@ -74,21 +76,27 @@ func main() {
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
-	flag.IntVar(&logLevel, "V", 0, "Log Level (from -1 -> 5), defaut: info(0), for more, https://pkg.go.dev/go.uber.org/zap/zapcore#Level")
+	flag.IntVar(&logLevel, "V", 0, "Log Level(debug info warn error dpanic panic fatal, from -1 to 5), info(0) is defaut, for more, https://pkg.go.dev/go.uber.org/zap/zapcore#Level")
 	flag.Parse()
 
+	conn := helper.GetConn(host, port, user, password, dbname)
+	atom = uberzap.NewAtomicLevelAt(zapcore.DebugLevel)
 	var level zapcore.Level
 	if logLevel >= -1 && logLevel <= 5 {
 		level = zapcore.Level(int8(logLevel))
 	}
-	ctrl.SetLogger(zap.New(zap.UseDevMode(true), zap.Level(level)))
+	atom.SetLevel(level)
+
+	// ctrl.SetLogger(zap.New(zap.UseDevMode(true), zap.Level(level)))
+	logger := zap.New(zap.UseDevMode(true), zap.Level(atom))
+	ctrl.SetLogger(logger)
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:             scheme,
 		MetricsBindAddress: metricsAddr,
 		Port:               9443,
 		LeaderElection:     enableLeaderElection,
-		LeaderElectionID:   "d2e9e7f6.jdwl.in",
+		LeaderElectionID:   "mgr.jdwl.in",
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
@@ -132,15 +140,21 @@ func StartHealthCheck(port string) {
 }
 
 // StartWebhookd start webhookd
+// dynamic logging level
+// curlie PUT http://localhost:9876/log_level level=debug
+// curl -X PUT -d '{"level": "info"}' http://localhost:9876/log_level
 func StartWebhookd(port string) {
-	http.HandleFunc("/", InsertEventHandler)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", InsertEventHandleFunc)
+	// mux.Handle("/log_level", logLevelEventHandler)
+	mux.Handle("/log_level", atom)
 
 	setupLog.Info(fmt.Sprintf("Webhookd listens on: 0.0.0.0:%s", port))
-	setupLog.Info(http.ListenAndServe(fmt.Sprintf(":%s", port), nil).Error())
+	setupLog.Info(http.ListenAndServe(fmt.Sprintf(":%s", port), mux).Error())
 }
 
-// InsertEventHandler handle tenants table insert event
-func InsertEventHandler(w http.ResponseWriter, r *http.Request) {
+// InsertEventHandleFunc handle tenants table insert event
+func InsertEventHandleFunc(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" {
 		fmt.Fprintln(w, "ok")
 	} else if r.Method == "POST" {
