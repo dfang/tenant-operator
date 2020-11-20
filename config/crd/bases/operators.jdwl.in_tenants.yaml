@@ -21,16 +21,18 @@ spec:
       jsonPath: .spec.uuid
       name: UUID
       type: string
-    - description: CName of the tenant
-      jsonPath: .spec.cname
-      name: CName
-      type: string
     - jsonPath: .status.url
       name: URL
       type: string
     - jsonPath: .status.status
       name: Status
       type: string
+    - jsonPath: .spec.replicas
+      name: Replicas
+      type: integer
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
     name: v1alpha1
     schema:
       openAPIV3Schema:
