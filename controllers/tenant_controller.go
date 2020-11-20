@@ -391,7 +391,8 @@ func (r *TenantReconciler) reconcileNamespace(tenant *operatorsv1alpha1.Tenant) 
 		Name: tenant.Spec.CName,
 	}, ns)
 
-	patch := []byte(`{"metadata":{"labels":{"owner": "tenant"}}}`)
+	labels := fmt.Sprintf(`{"metadata":{"labels":{"owner": "tenant", "uuid": "%s"}}}`, tenant.Spec.UUID)
+	patch := []byte(labels)
 	if err == nil {
 		_ = r.Client.Patch(context.TODO(), ns, client.RawPatch(types.StrategicMergePatchType, patch))
 	}
