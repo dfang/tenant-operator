@@ -31,8 +31,10 @@ import (
 	"go.uber.org/zap/zapcore"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+
+	// _ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	operatorsv1alpha1 "github.com/dfang/tenant-operator/api/v1alpha1"
@@ -92,15 +94,31 @@ func main() {
 	ctrl.SetLogger(logger)
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:             scheme,
-		MetricsBindAddress: metricsAddr,
-		Port:               9443,
-		LeaderElection:     enableLeaderElection,
-		LeaderElectionID:   "mgr.jdwl.in",
+		Scheme:                 scheme,
+		MetricsBindAddress:     metricsAddr,
+		HealthProbeBindAddress: ":8081",
+		Port:                   9443,
+		LeaderElection:         enableLeaderElection,
+		LeaderElectionID:       "mgr.jdwl.in",
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
+	}
+
+	// health check
+	// https://kubernetes.io/docs/reference/using-api/health-checks/
+
+	// Readyness probe :8081/healthz
+	err = mgr.AddReadyzCheck("readiness", healthz.Ping)
+	if err != nil {
+		logger.V(5).Info("unable add a readiness check", "ready", err)
+	}
+
+	// Liveness probe :8081/readyz
+	err = mgr.AddHealthzCheck("liveness", healthz.Ping)
+	if err != nil {
+		logger.V(5).Info("unable add a health check", "healthz", err)
 	}
 
 	port := envOrDefault("PORT", "9876")
@@ -148,7 +166,6 @@ func StartWebhookd(port string) {
 	mux.HandleFunc("/", InsertEventHandleFunc)
 	// mux.Handle("/log_level", logLevelEventHandler)
 	mux.Handle("/log_level", atom)
-
 	setupLog.Info(fmt.Sprintf("Webhookd listens on: 0.0.0.0:%s", port))
 	setupLog.Info(http.ListenAndServe(fmt.Sprintf(":%s", port), mux).Error())
 }
