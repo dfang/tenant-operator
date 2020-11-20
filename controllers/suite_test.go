@@ -17,11 +17,14 @@ limitations under the License.
 package controllers
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -79,6 +82,44 @@ var _ = BeforeSuite(func(done Done) {
 
 var _ = AfterSuite(func() {
 	By("tearing down the test environment")
-	err := testEnv.Stop()
-	Expect(err).ToNot(HaveOccurred())
+	// err := testEnv.Stop()
+	// Expect(err).ToNot(HaveOccurred())
+})
+
+var _ = Describe("CronJob controller", func() {
+
+	const (
+		cname = "romantic-colony-0844"
+		uuid  = "a9bec3752ff65f6f9f2b"
+	)
+
+	Context("When create a tenant", func() {
+		It("Should succeed", func() {
+			By("By creating a new Tenant")
+			ctx := context.Background()
+			tenant := &operatorsv1alpha1.Tenant{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: operatorsv1alpha1.GroupVersion.String(),
+					Kind:       "Tenant",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      cname,
+					Namespace: cname,
+				},
+				Spec: operatorsv1alpha1.TenantSpec{
+					UUID:  uuid,
+					CName: cname,
+				},
+			}
+
+			ns := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: cname,
+				},
+			}
+			k8sClient.Create(ctx, ns)
+
+			Expect(k8sClient.Create(ctx, tenant)).Should(Succeed())
+		})
+	})
 })
