@@ -18,6 +18,7 @@ require (
 	github.com/lib/pq v1.8.0
 	github.com/markbates/pkger v0.17.1
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
+	github.com/olekukonko/tablewriter v0.0.0-20170122224234-a0225b3f23b5
 	github.com/onsi/ginkgo v1.12.1
 	github.com/onsi/gomega v1.10.1
 	github.com/prometheus/client_golang v1.8.0 // indirect

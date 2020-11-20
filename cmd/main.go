@@ -12,9 +12,8 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"text/tabwriter"
-
 	_ "github.com/lib/pq"
+	"github.com/olekukonko/tablewriter"
 
 	haikunator "github.com/atrox/haikunatorgo/v2"
 	operatorsv1alpha1 "github.com/dfang/tenant-operator/api/v1alpha1"
@@ -212,7 +211,7 @@ func main() {
 			{
 				Name:    "delete",
 				Aliases: []string{"d"},
-				Usage:   "delete a tenant by `uuid`",
+				Usage:   "delete a tenant by `cname`",
 				Action: func(c *cli.Context) error {
 					deleteTenant(kv, c)
 					return nil
@@ -265,25 +264,6 @@ func addTenant(kv *api.KV, c *cli.Context) error {
 		cnameV = haikunator.Haikunate()
 	}
 
-	uuidKey := "tenants/" + tenantKey + "/uuid"
-	cnameKey := "tenants/" + tenantKey + "/cname"
-	replicasKey := "tenants/" + tenantKey + "/replicas"
-
-	// PUT a KV pair
-	if err := putKey(kv, uuidKey, tenantKey); err != nil {
-		return err
-	}
-
-	// PUT a KV pair
-	if err := putKey(kv, cnameKey, cnameV); err != nil {
-		return err
-	}
-
-	// PUT a new KV pair
-	if err := putKey(kv, replicasKey, strconv.Itoa(c.Int("replicas"))); err != nil {
-		return err
-	}
-
 	t := operatorsv1alpha1.Tenant{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: appsv1.SchemeGroupVersion.String(), Kind: "Tenant",
@@ -327,47 +307,42 @@ func addTenant(kv *api.KV, c *cli.Context) error {
 	fmt.Printf("Created tenant, uuid: %s, cname: %s, replicas: %d\n", tenantKey, cnameV, replicas)
 	err = cl.Create(context.Background(), &t)
 	if err != nil {
-		fmt.Println("failed to create tenant")
-		fmt.Println(err)
+		fmt.Println("failed to create tenant", err)
 		os.Exit(1)
 	}
 
 	return nil
 }
 
-func deleteTenant(kv *api.KV, c *cli.Context) error {
+func deleteTenant(kv *api.KV, c *cli.Context) {
 	// delete tenant namespace
 	// remove key from consul
 
 	if c.NArg() == 0 {
 		cli.ShowSubcommandHelp(c)
-		return nil
+		os.Exit(0)
 	}
 
-	uuid := c.Args().Get(0)
-	prefix := "tenants/" + uuid + "/cname"
-	cname, _, err := kv.Get(prefix, nil)
+	cl := helper.GetClientOrDie()
+	cname := c.Args().Get(0)
+
+	ns := &corev1.Namespace{}
+	err := cl.Get(context.Background(), client.ObjectKey{
+		Name: cname,
+	}, ns)
+
+	// fmt.Println(err)
+	// fmt.Println(ns)
+
 	if err != nil {
 		fmt.Println(err)
-		return err
+		os.Exit(1)
+	} else {
+		// err == nil 时， ns 存在
+		if err = helper.DeleteNamespaceIfExist(cname); err != nil {
+			log.Panic(err)
+		}
 	}
-	if cname == nil {
-		fmt.Printf("tenant %s not exist\n", uuid)
-		return nil
-	}
-
-	if err = helper.DeleteNamespaceIfExist(string(cname.Value)); err != nil {
-		log.Panic(err)
-	}
-
-	_, err = kv.DeleteTree("tenants/"+uuid+"/", nil)
-	fmt.Println("delete key", "tenants/"+uuid)
-	if err != nil {
-		fmt.Println(err)
-		return err
-	}
-
-	return nil
 }
 
 func purgeTenants(kv *api.KV) error {
@@ -412,68 +387,38 @@ func purgeTenants(kv *api.KV) error {
 }
 
 func listTenants(kv *api.KV, c *cli.Context) {
-	keys, _, err := kv.Keys("tenants/", "/", &api.QueryOptions{})
-	// kvPairs, _, err := kv.List("tenants/", &api.QueryOptions{})
-	if err != nil {
-		panic(err)
-	}
-
+	data := make([][]string, 10, 10)
 	tl := &operatorsv1alpha1.TenantList{}
-	// client from controller runtime
-	cl, err := client.New(config.GetConfigOrDie(), client.Options{})
-	if err != nil {
-		fmt.Println("failed to create client")
-		os.Exit(1)
-	}
-	// w := tabwriter.NewWriter(os.Stdout, 1, 1, 3, ' ', tabwriter.AlignRight)
-	writer := tabwriter.NewWriter(os.Stdout, 0, 8, 1, '\t', tabwriter.AlignRight)
-	// w := new(tabwriter.Writer)
-	// w.Init(os.Stdout, 2, 8, 2, '\t', tabwriter.AlignRight)
 
-	// c is a created client.
-	_ = cl.List(context.Background(), tl)
-	fmt.Fprintf(w, "UUID\tCName\tURL\tStatus\tReplicas\n")
+	newListOpts := &client.ListOptions{
+		Limit: 100,
+		// FieldSelector: f.AsSelector(),
+	}
+	m := client.MatchingFields{}
+	m.ApplyToList(newListOpts)
+
+	_ = helper.GetClientOrDie().List(context.Background(), tl, newListOpts)
+	// cl is a created client.Client
+	// _ = helper.GetClientOrDie().List(context.Background(), tl, &client.ListOptions{
+	// 	// LabelSelector: labels.SelectorFromSet(map[string]string{"app": "sample"}),
+	// 	// FieldSelector: fields.Nothing(),
+	// 	FieldSelector: f.AsSelector(),
+	// })
+
 	for _, t := range tl.Items {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%d\n", t.Spec.UUID, t.Spec.CName, t.Status.URL, t.Status.Status, t.Status.Replicas)
+		s := []string{t.Spec.UUID, t.Spec.CName, t.Status.URL, t.Status.Status, strconv.FormatInt(int64(t.Status.Replicas), 10)}
+		data = append(data, s)
 	}
 
-	if c.String("o") == "uuid" {
-		// fmt.Fprintln(w, "UUID")
-		for _, v := range keys {
-			uuid, _, err := kv.Get(v+"uuid", nil)
-			if err != nil {
-				panic(err)
-			}
-			fmt.Fprintf(w, "%s\n", uuid.Value)
-		}
-	}
-
-	if c.String("o") == "cname" {
-		// fmt.Fprintln(w, "CName")
-		for _, v := range keys {
-			cname, _, err := kv.Get(v+"cname", nil)
-			if err != nil {
-				panic(err)
-			}
-			fmt.Fprintf(w, "%s\n", cname.Value)
-		}
-	}
-
-	if c.String("o") == "" {
-		fmt.Fprintln(w, "UUID\t\tCName\t\tURL\t\tStatus")
-		for _, v := range keys {
-			uuid, _, err := kv.Get(v+"uuid", nil)
-			if err != nil {
-				panic(err)
-			}
-			cname, _, err := kv.Get(v+"cname", nil)
-			if err != nil {
-				panic(err)
-			}
-			fmt.Fprintf(w, "%s\t\t%s\t\t%s\t\t%s\n", uuid.Value, cname.Value, fmt.Sprintf("http://%s.jdwl.in", cname.Value), "?")
-		}
-	}
-	w.Flush()
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetHeader([]string{"UUID", "CName", "URL", "Status", "Replicas"})
+	table.SetAutoFormatHeaders(true)
+	table.AppendBulk(data) // Add Bulk Data
+	// table.SetCenterSeparator("")
+	// table.SetRowSeparator("")
+	// table.SetColumnSeparator("")
+	// table.SetBorder(false)
+	table.Render()
 }
 
 func scaleTenant(kv *api.KV, c *cli.Context) {
