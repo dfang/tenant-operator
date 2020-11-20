@@ -30,6 +30,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -80,6 +81,13 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	if ns.Status.Phase == corev1.NamespaceTerminating {
 		return ctrl.Result{}, nil
+	}
+
+	// maybe add labels when create a tenant
+	// no need to reconcile every loop
+	if result, err := r.reconcileNamespace(tenant); err != nil {
+		log.Error(err, "failed to reconcile namespace label")
+		return result, err
 	}
 
 	if result, err := r.reconcileDB(tenant); err != nil {
@@ -176,7 +184,7 @@ func (r *TenantReconciler) reconcileDeployment(tenant *operatorsv1alpha1.Tenant)
 	if err != nil {
 		log.Error(err, "deployment reconcile failed")
 	} else {
-		log.Info("deployment successfully reconciled", "operation", op)
+		log.Info("deployment reconciled", "operation", op)
 	}
 
 	if err != nil {
@@ -372,6 +380,22 @@ func (r *TenantReconciler) updateStatus(tenant *operatorsv1alpha1.Tenant) (ctrl.
 	}
 
 	r.recorder.Event(tenant, corev1.EventTypeNormal, "Reconciliation status changed", "Reconciling update status finished")
+	return ctrl.Result{}, nil
+}
+
+func (r *TenantReconciler) reconcileNamespace(tenant *operatorsv1alpha1.Tenant) (ctrl.Result, error) {
+	log := r.Log.WithValues("tenant", tenant.Namespace)
+	log.Info("set label owner=tenant for tenant namespace")
+	ns := &corev1.Namespace{}
+	err := r.Client.Get(context.Background(), client.ObjectKey{
+		Name: tenant.Spec.CName,
+	}, ns)
+
+	patch := []byte(`{"metadata":{"labels":{"owner": "tenant"}}}`)
+	if err == nil {
+		_ = r.Client.Patch(context.TODO(), ns, client.RawPatch(types.StrategicMergePatchType, patch))
+	}
+
 	return ctrl.Result{}, nil
 }
 
