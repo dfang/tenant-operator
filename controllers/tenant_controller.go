@@ -60,7 +60,6 @@ func (r *TenantReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	// Fetch the tenant from the cache
 	tenant := &operatorsv1alpha1.Tenant{}
 	if err := r.Client.Get(context.TODO(), req.NamespacedName, tenant); err != nil {
-		log.Error(err, "failed to get tenant from cache")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
@@ -324,20 +323,29 @@ func (r *TenantReconciler) reconcileFinalizers(tenant *operatorsv1alpha1.Tenant)
 		// The object is not being deleted, so if it does not have our finalizer,
 		// then lets add the finalizer and update the object. This is equivalent
 		// registering our finalizer.
-		controllerutil.AddFinalizer(tenant, dbFinalizer)
+		if !controllerutil.ContainsFinalizer(tenant, dbFinalizer) {
+			controllerutil.AddFinalizer(tenant, dbFinalizer)
+			if err := r.Update(context.TODO(), tenant); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
 	} else {
 		// The object is being deleted
 		if controllerutil.ContainsFinalizer(tenant, dbFinalizer) {
 			// our finalizer is present, so lets handle any external dependency
+			// ここで外部リソースを削除する
 			if err := r.deleteExternalResources(*tenant); err != nil {
 				// if fail to delete the external dependency here, return with error
 				// so that it can be retried
 				return ctrl.Result{}, err
 			}
-
 			// remove our finalizer from the list and update it.
 			controllerutil.RemoveFinalizer(tenant, dbFinalizer)
+			if err := r.Update(context.TODO(), tenant); err != nil {
+				return ctrl.Result{}, err
+			}
 		}
+		return ctrl.Result{}, nil
 	}
 
 	return ctrl.Result{}, nil
