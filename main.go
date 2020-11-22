@@ -26,7 +26,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/heptiolabs/healthcheck"
 	uberzap "go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -106,6 +105,22 @@ func main() {
 		os.Exit(1)
 	}
 
+	port := envOrDefault("PORT", "9876")
+	go StartWebhookd(port)
+
+	if err = (&controllers.TenantReconciler{
+		Client: mgr.GetClient(),
+		Log:    ctrl.Log.WithName("controllers").WithName("Tenant").V(3),
+		Scheme: mgr.GetScheme(),
+		// DBConn DB Connection
+		DBConn: conn,
+		// Tenant Domain
+		Domain: domain,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Tenant")
+		os.Exit(1)
+	}
+
 	// health check
 	// https://kubernetes.io/docs/reference/using-api/health-checks/
 
@@ -121,23 +136,6 @@ func main() {
 		logger.V(5).Info("unable add a health check", "healthz", err)
 	}
 
-	port := envOrDefault("PORT", "9876")
-	go StartWebhookd(port)
-	go StartHealthCheck(port)
-
-	if err = (&controllers.TenantReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("Tenant").V(3),
-		Scheme: mgr.GetScheme(),
-		// DBConn DB Connection
-		DBConn: conn,
-		// Tenant Domain
-		Domain: domain,
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "Tenant")
-		os.Exit(1)
-	}
-
 	// +kubebuilder:scaffold:builder
 
 	setupLog.Info("starting manager")
@@ -145,16 +143,6 @@ func main() {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
-}
-
-// StartHealthCheck start webhookd
-func StartHealthCheck(port string) {
-	health := healthcheck.NewHandler()
-	health.AddLivenessCheck("goroutine-threshold", healthcheck.GoroutineCountCheck(100))
-	webhookURL := fmt.Sprintf("http://localhost:%s", port)
-	health.AddLivenessCheck("webhook", healthcheck.HTTPGetCheck(webhookURL, 500*time.Millisecond))
-	setupLog.Info("HealthCheck listens on: 0.0.0.0:8086")
-	setupLog.Info(http.ListenAndServe("0.0.0.0:8086", health).Error())
 }
 
 // StartWebhookd start webhookd

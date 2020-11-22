@@ -68,6 +68,15 @@ GLOBAL OPTIONS:
 ```
 
 
+
+### Endponits
+
+```
+localhost:8080/metrics
+localhost:8081/healthz
+localhost:8081/readyz
+```
+
 ### Some commands maybe helpful when developing on local
 
 ```
