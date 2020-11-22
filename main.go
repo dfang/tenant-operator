@@ -163,11 +163,22 @@ func StartWebhookd(port string) {
 	router.Handler("GET", "/log_level", atom)
 	router.Handler("PUT", "/log_level", atom)
 	router.Handle("GET", "/tenants/:uuid", tenantInfo)
-	router.HandlerFunc("GET", "/", InsertEventHandleFunc)
+	router.Handle("GET", "/", Index)
 	router.HandlerFunc("POST", "/", InsertEventHandleFunc)
 
 	setupLog.Info(fmt.Sprintf("Webhookd listens on: 0.0.0.0:%s", port))
 	setupLog.Info(http.ListenAndServe(fmt.Sprintf(":%s", port), router).Error())
+}
+
+// Index index endpoint
+func Index(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	fmt.Fprintf(w, "|%-20s|%-20s|%-30s\n", "URL", "METHOD", "Remark")
+	fmt.Fprintf(w, "|%-20s|%-20s|%-30s\n", "/", "GET /", "This endpoint")
+	fmt.Fprintf(w, "|%-20s|%-20s|%-30s\n", "/", "POST /", "Webhookd endpoint")
+
+	fmt.Fprintf(w, "|%-20s|%-20s|%-30s\n", "/log_level", "GET /log_level", "Get global Log level")
+	fmt.Fprintf(w, "|%-20s|%-20s|%-30s\n", "/log_level", "PUT /log_level", "Set global Log level")
+	fmt.Fprintf(w, "|%-20s|%-20s|%-30s\n", "/tenants/:uuid", "GET /tenants/:uuid", "Get tenant info")
 }
 
 // InsertEventHandleFunc handle tenants table insert event
