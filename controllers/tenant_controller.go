@@ -363,7 +363,7 @@ func (r *TenantReconciler) updateStatus(tenant *operatorsv1alpha1.Tenant) (ctrl.
 	log := r.Log.WithValues("tenant", tenant.Namespace)
 	log.Info("update tenant status")
 
-	tenant.Status.URL = r.getTenantSubdomain(tenant.Spec.CName)
+	tenant.Status.URL = fmt.Sprintf("http://%s", r.getTenantSubdomain(tenant.Spec.CName))
 	tenant.Status.Replicas = tenant.Spec.Replicas
 	tenant.Status.CName = tenant.Spec.CName
 

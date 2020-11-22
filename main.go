@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"flag"
@@ -28,17 +29,21 @@ import (
 
 	uberzap "go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 
 	// _ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	operatorsv1alpha1 "github.com/dfang/tenant-operator/api/v1alpha1"
 	"github.com/dfang/tenant-operator/controllers"
 	"github.com/dfang/tenant-operator/pkg/helper"
+	"github.com/julienschmidt/httprouter"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -60,6 +65,8 @@ var (
 	dbname   = envOrDefault("TENANTS_DB_NAME", "tenants")
 	// domain subdmaon for a tenant is http://cname.{{.DOAMIN}}
 	domain = envOrDefault("TENANTS_DOMAIN", "jdwl.in")
+
+	cachedClient client.Client
 )
 
 func init() {
@@ -106,6 +113,7 @@ func main() {
 	}
 
 	port := envOrDefault("PORT", "9876")
+	cachedClient = mgr.GetClient()
 	go StartWebhookd(port)
 
 	if err = (&controllers.TenantReconciler{
@@ -150,12 +158,16 @@ func main() {
 // curlie PUT http://localhost:9876/log_level level=debug
 // curl -X PUT -d '{"level": "info"}' http://localhost:9876/log_level
 func StartWebhookd(port string) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", InsertEventHandleFunc)
+	router := httprouter.New()
 	// mux.Handle("/log_level", logLevelEventHandler)
-	mux.Handle("/log_level", atom)
+	router.Handler("GET", "/log_level", atom)
+	router.Handler("PUT", "/log_level", atom)
+	router.Handle("GET", "/tenants/:uuid", tenantInfo)
+	router.HandlerFunc("GET", "/", InsertEventHandleFunc)
+	router.HandlerFunc("POST", "/", InsertEventHandleFunc)
+
 	setupLog.Info(fmt.Sprintf("Webhookd listens on: 0.0.0.0:%s", port))
-	setupLog.Info(http.ListenAndServe(fmt.Sprintf(":%s", port), mux).Error())
+	setupLog.Info(http.ListenAndServe(fmt.Sprintf(":%s", port), router).Error())
 }
 
 // InsertEventHandleFunc handle tenants table insert event
@@ -200,6 +212,67 @@ func InsertEventHandleFunc(w http.ResponseWriter, r *http.Request) {
 
 	} else {
 		http.Error(w, "Invalid request method.", 405)
+	}
+}
+
+func tenantInfo(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
+	// fmt.Fprintln(w, r.URL.Path)
+	// fmt.Fprintln(w, params.ByName("uuid"))
+
+	// lo := ListOptions{}
+	// labels := HasLabels{"owner", "uuid"}
+	//   labels.ApplyToList(lo)
+	// LabelSelector
+
+	pairs := labels.Set{
+		"owner": "tenant",
+		"uuid":  params.ByName("uuid"),
+	}
+	// cl := helper.GetClientOrDie()
+	nsList := &corev1.NamespaceList{}
+	err := cachedClient.List(context.Background(), nsList, &client.ListOptions{
+		LabelSelector: pairs.AsSelector(),
+	})
+
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	if len(nsList.Items) > 0 {
+		cname := nsList.Items[0].Name
+
+		t := &operatorsv1alpha1.Tenant{}
+		// err := cl.Get(context.Background(), client.ObjectKey{
+		err := cachedClient.Get(context.Background(), client.ObjectKey{
+			Name:      cname,
+			Namespace: cname,
+		}, t)
+
+		if err != nil {
+			panic(err)
+		}
+
+		obj := struct {
+			UUID  string `json:"uuid"`
+			CName string `json:"cname"`
+			URL   string `json:"url"`
+		}{
+			t.Spec.UUID,
+			t.Spec.CName,
+			t.Status.URL,
+		}
+
+		data, err := json.Marshal(obj)
+		if err != nil {
+			panic(err)
+		}
+
+		// fmt.Fprintln(w, t.Spec.UUID)
+		// fmt.Fprintln(w, t.Spec.CName)
+		// fmt.Fprintln(w, t.Status.URL)
+
+		// fmt.Fprintln(w, "ok")
+		fmt.Fprintln(w, string(data))
 	}
 }
 
