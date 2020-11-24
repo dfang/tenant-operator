@@ -25,7 +25,7 @@ WORKDIR /
 COPY --from=builder /workspace/manager .
 
 # workaround, before pgker bug resolved or go 2 file embed api ready
-COPY controllers/templates controllers/
+# COPY controllers/templates controllers/
 
 USER nonroot:nonroot
 

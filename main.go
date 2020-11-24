@@ -56,8 +56,6 @@ var (
 
 	logLevelEventHandler http.Handler
 	atom                 uberzap.AtomicLevel
-
-	templates map[string]string
 )
 
 var (
@@ -90,10 +88,9 @@ func main() {
 	flag.IntVar(&logLevel, "V", 0, "Log Level(debug info warn error dpanic panic fatal, from -1 to 5), info(0) is defaut, for more, https://pkg.go.dev/go.uber.org/zap/zapcore#Level")
 	flag.Parse()
 
-	templates = make(map[string]string, 10)
-	// if err := preloadTemplates(); err != nil {
-	// 	panic(err)
-	// }
+	if err := preloadTemplates(); err != nil {
+		panic(err)
+	}
 
 	conn := helper.GetConn(host, port, user, password, dbname)
 	atom = uberzap.NewAtomicLevelAt(zapcore.DebugLevel)
@@ -132,8 +129,6 @@ func main() {
 		DBConn: conn,
 		// Tenant Domain
 		Domain: domain,
-		// Templates
-		// Templates: templates,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Tenant")
 		os.Exit(1)
@@ -351,73 +346,30 @@ type T struct {
 }
 
 func preloadTemplates() error {
-	renderEnvConfig()
-	renderRedisDeploy()
-	renderRedisSvc()
-	renderIngressRoute()
-	// if str, err := helper.EmbedTemplate("/controllers/templates/env-config.yaml"); err != nil {
-	// 	panic(err)
-	// } else {
-	// 	templates["env-config"] = str
-	// }
-
-	// if str, err := helper.EmbedTemplate("/controllers/templates/ingressRoute.yaml"); err != nil {
-	// 	fmt.Println(err)
-	// 	panic(err)
-	// } else {
-	// 	templates["ingressRoute"] = str
-	// }
-
-	// if str, err := helper.EmbedTemplate("/controllers/templates/redis-deploy.yaml"); err != nil {
-	// 	fmt.Println(err)
-	// 	panic(err)
-	// } else {
-	// 	templates["redis-deploy"] = str
-	// }
-
-	// if str, err := helper.EmbedTemplate("/controllers/templates/redis-svc.yaml"); err != nil {
-	// 	fmt.Println(err)
-	// 	panic(err)
-	// } else {
-	// 	templates["redis-svc"] = str
-	// }
-
-	return nil
-}
-
-func renderEnvConfig() error {
-	// 这里先open下会有cache，在controllers open 就不会出错了
-	f, err := pkger.Open("/controllers/templates/env-config.yaml")
+	// 这里先open下会cache起来，在controllers open 就不会找不到了
+	f1, err := pkger.Open("/controllers/templates/env-config.yaml")
 	if err != nil {
 		panic(err)
 	}
-	defer f.Close()
-	return nil
-}
+	f1.Close()
 
-func renderRedisDeploy() error {
-	f, err := pkger.Open("/controllers/templates/redis-deploy.yaml")
+	f2, err := pkger.Open("/controllers/templates/redis-deploy.yaml")
 	if err != nil {
 		panic(err)
 	}
-	defer f.Close()
-	return nil
-}
+	f2.Close()
 
-func renderRedisSvc() error {
-	f, err := pkger.Open("/controllers/templates/redis-svc.yaml")
+	f3, err := pkger.Open("/controllers/templates/redis-svc.yaml")
 	if err != nil {
 		panic(err)
 	}
-	defer f.Close()
-	return nil
-}
+	f3.Close()
 
-func renderIngressRoute() error {
-	f, err := pkger.Open("/controllers/templates/ingressRoute.yaml")
+	f4, err := pkger.Open("/controllers/templates/ingressRoute.yaml")
 	if err != nil {
 		panic(err)
 	}
-	defer f.Close()
+	f4.Close()
+
 	return nil
 }
