@@ -167,6 +167,7 @@ func (r *TenantReconciler) desiredConfigmap(tenant operatorsv1alpha1.Tenant) err
 	}
 
 	yamlContent := renderTemplate("/controllers/templates/env-config.yaml", data)
+	// yamlContent := renderConfigMap(data)
 
 	_, err := helper.DoSSA(context.Background(), config, yamlContent)
 	if err != nil {
@@ -269,6 +270,35 @@ func (r *TenantReconciler) createOrUpdateUser(tenant operatorsv1alpha1.Tenant, p
 		fmt.Println("Successfully created/updated database user ...")
 	}
 }
+
+// func renderConfigMap(data interface{}) string {
+// 	f, err := pkger.Open("github.com/dfang/tenant-operator:/controllers/templates/env-config.yaml")
+// 	if err != nil {
+// 		panic(err)
+// 	}
+
+// 	defer f.Close()
+
+// 	b, err := ioutil.ReadAll(f)
+// 	if err != nil {
+// 		panic(err)
+// 	}
+
+// 	tmpl, err := template.New("configmap").Parse(string(b))
+// 	if err != nil {
+// 		panic(err)
+// 	}
+
+// 	buf := new(bytes.Buffer)
+// 	err = tmpl.Execute(buf, data)
+// 	if err != nil {
+// 		panic(err)
+// 	}
+
+// 	yamlContent := buf.String()
+
+// 	return yamlContent
+// }
 
 // renderTemplate renderTemplate with data, return yamlContent
 func renderTemplate(tpl string, data interface{}) string {

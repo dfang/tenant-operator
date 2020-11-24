@@ -44,6 +44,7 @@ import (
 	"github.com/dfang/tenant-operator/controllers"
 	"github.com/dfang/tenant-operator/pkg/helper"
 	"github.com/julienschmidt/httprouter"
+	"github.com/markbates/pkger"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -350,32 +351,73 @@ type T struct {
 }
 
 func preloadTemplates() error {
-	if str, err := helper.EmbedTemplate("/controllers/templates/env-config.yaml"); err != nil {
-		panic(err)
-	} else {
-		templates["env-config"] = str
-	}
+	renderEnvConfig()
+	renderRedisDeploy()
+	renderRedisSvc()
+	renderIngressRoute()
+	// if str, err := helper.EmbedTemplate("/controllers/templates/env-config.yaml"); err != nil {
+	// 	panic(err)
+	// } else {
+	// 	templates["env-config"] = str
+	// }
 
-	if str, err := helper.EmbedTemplate("/controllers/templates/ingressRoute.yaml"); err != nil {
-		fmt.Println(err)
-		panic(err)
-	} else {
-		templates["ingressRoute"] = str
-	}
+	// if str, err := helper.EmbedTemplate("/controllers/templates/ingressRoute.yaml"); err != nil {
+	// 	fmt.Println(err)
+	// 	panic(err)
+	// } else {
+	// 	templates["ingressRoute"] = str
+	// }
 
-	if str, err := helper.EmbedTemplate("/controllers/templates/redis-deploy.yaml"); err != nil {
-		fmt.Println(err)
-		panic(err)
-	} else {
-		templates["redis-deploy"] = str
-	}
+	// if str, err := helper.EmbedTemplate("/controllers/templates/redis-deploy.yaml"); err != nil {
+	// 	fmt.Println(err)
+	// 	panic(err)
+	// } else {
+	// 	templates["redis-deploy"] = str
+	// }
 
-	if str, err := helper.EmbedTemplate("/controllers/templates/redis-svc.yaml"); err != nil {
-		fmt.Println(err)
-		panic(err)
-	} else {
-		templates["redis-svc"] = str
-	}
+	// if str, err := helper.EmbedTemplate("/controllers/templates/redis-svc.yaml"); err != nil {
+	// 	fmt.Println(err)
+	// 	panic(err)
+	// } else {
+	// 	templates["redis-svc"] = str
+	// }
 
+	return nil
+}
+
+func renderEnvConfig() error {
+	// 这里先open下会有cache，在controllers open 就不会出错了
+	f, err := pkger.Open("/controllers/templates/env-config.yaml")
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+	return nil
+}
+
+func renderRedisDeploy() error {
+	f, err := pkger.Open("/controllers/templates/redis-deploy.yaml")
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+	return nil
+}
+
+func renderRedisSvc() error {
+	f, err := pkger.Open("/controllers/templates/redis-svc.yaml")
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+	return nil
+}
+
+func renderIngressRoute() error {
+	f, err := pkger.Open("/controllers/templates/ingressRoute.yaml")
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
 	return nil
 }
