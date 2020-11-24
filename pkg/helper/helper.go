@@ -5,12 +5,14 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"os"
 	"time"
 
 	operatorsv1alpha1 "github.com/dfang/tenant-operator/api/v1alpha1"
 
+	"github.com/markbates/pkger"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -296,4 +298,29 @@ func CreateTenant(name, namespace, uuid string) error {
 	// Create(ctx context.Context, obj runtime.Object, opts ...CreateOption) error
 
 	return nil
+}
+
+// EmbedTemplate EmbedTemplate
+func EmbedTemplate(tpl string) (string, error) {
+	f, err := pkger.Open(tpl)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	info, err := f.Stat()
+	if err != nil {
+		return "", err
+	}
+
+	fmt.Println("Name: ", info.Name())
+	fmt.Println("Size: ", info.Size())
+	fmt.Println("Mode: ", info.Mode())
+	fmt.Println("ModTime: ", info.ModTime())
+
+	if b, err := ioutil.ReadAll(f); err != nil {
+		return "", err
+	} else {
+		return string(b), nil
+	}
 }

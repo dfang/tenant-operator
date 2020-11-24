@@ -21,3 +21,6 @@ AddReadyzCheck
 5. dynamic log level
 https://dev.to/rusty_sys_dev/golang-dynamic-logging-3p7k
 
+5. package static resources (eg. YAML templates)
+github.com/markbates/pkger
+go 2 embed api
