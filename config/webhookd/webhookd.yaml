@@ -18,6 +18,11 @@ spec:
       containers:
       - image: dfang/webhookd
         name: webhookd
+        env:
+          - name: FAKTORY_URL
+            value: tcp://:admin@jdwl-operator-faktory:7419
+          - name: TENANTS_MANAGER_ENDPOINT
+            value: api.jdwl.in
         resources: {}
 status: {}
 
