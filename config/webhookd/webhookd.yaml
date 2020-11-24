@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: webhookd
+  name: webhookd
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: webhookd
+  strategy: {}
+  template:
+    metadata:
+      labels:
+        app: webhookd
+    spec:
+      containers:
+      - image: dfang/webhookd
+        name: webhookd
+        resources: {}
+status: {}
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: webhookd
+  name: webhookd
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 80
+  selector:
+    app: webhookd
+status:
+  loadBalancer: {}

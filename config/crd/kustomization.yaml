@@ -3,7 +3,6 @@
 # It should be run by config/default
 resources:
 - bases/operators.jdwl.in_tenants.yaml
-- bases/operators.jdwl.in_tenantnamespaces.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patchesStrategicMerge:

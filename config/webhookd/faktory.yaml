@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: faktory
+  name: faktory
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: faktory
+  strategy: {}
+  template:
+    metadata:
+      labels:
+        app: faktory
+    spec:
+      containers:
+      - image: contribsys/faktory
+        ports:
+        - name:  http
+          containerPort:  7419
+          protocol: TCP
+        - name:  ui
+          containerPort:  7420
+          protocol: TCP
+        name: faktory
+        resources: {}
+status: {}
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: faktory
+  name: faktory
+spec:
+  ports:
+  - name: http
+    port: 7419
+    protocol: TCP
+    targetPort: 7419
+  - name: ui
+    port: 7420
+    protocol: TCP
+    targetPort: 7420
+  selector:
+    app: faktory
+status: {}

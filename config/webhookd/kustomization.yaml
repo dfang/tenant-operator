@@ -1,0 +1,4 @@
+resources:
+- faktory.yaml
+- webhookd.yaml
+- traefik-dashboard.yaml

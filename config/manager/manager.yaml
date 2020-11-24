@@ -29,6 +29,9 @@ spec:
         - --enable-leader-election
         image: controller:latest
         name: manager
+        envFrom:
+        - secretRef:
+            name: tenants-db-secret
         imagePullPolicy: Always
         resources:
           limits:

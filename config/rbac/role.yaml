@@ -27,26 +27,6 @@ rules:
 - apiGroups:
   - operators.jdwl.in
   resources:
-  - tenantnamespaces
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - operators.jdwl.in
-  resources:
-  - tenantnamespaces/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - operators.jdwl.in
-  resources:
   - tenants
   verbs:
   - create
