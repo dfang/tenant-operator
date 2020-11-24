@@ -77,22 +77,29 @@ localhost:8081/healthz
 localhost:8081/readyz
 ```
 
+## setup postgres operator and pgo client
+
+```
+kubectl create namespace pgo
+kubectl apply -f https://raw.githubusercontent.com/CrunchyData/postgres-operator/v4.5.1/installers/kubectl/postgres-operator.yml
+
+# setup pgo client
+# https://access.crunchydata.com/documentation/postgres-operator/4.5.1/quickstart/#postgresql-operator-installer
+
+kubectl -n pgo port-forward svc/postgres-operator 8443:8443
+pgo create cluster tenants
+```
+
 ### Some commands maybe helpful when developing on local
 
 ```
 kubectl -n pgo port-forward svc/tenants 5432:5432
+
 export $(cat .env.local | xargs)
-
-
-
-export $(cat .env| xargs)
-
-kubectl -n pgo port-forward svc/postgres-operator 8443:8443
 
 pgo show user tenants --show-system-accounts
 
 pgo delete user --username=solitary-mud-a18aaf3f1 --selector=name=tenants --no-prompt
 
 pgo update user -n pgo tenants --username=hidden-block-645179a57 --password=2d0O/o7(+|#*
-
 ```
