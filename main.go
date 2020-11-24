@@ -114,7 +114,7 @@ func main() {
 
 	port := envOrDefault("PORT", "9876")
 	cachedClient = mgr.GetClient()
-	go StartWebhookd(port)
+	go startDaemon(port)
 
 	if err = (&controllers.TenantReconciler{
 		Client: mgr.GetClient(),
@@ -153,11 +153,11 @@ func main() {
 	}
 }
 
-// StartWebhookd start webhookd
+// startDaemon start daemon
 // dynamic logging level
 // curlie PUT http://localhost:9876/log_level level=debug
 // curl -X PUT -d '{"level": "info"}' http://localhost:9876/log_level
-func StartWebhookd(port string) {
+func startDaemon(port string) {
 	router := httprouter.New()
 	// mux.Handle("/log_level", logLevelEventHandler)
 	router.Handler("GET", "/log_level", atom)
@@ -166,7 +166,7 @@ func StartWebhookd(port string) {
 	router.Handle("GET", "/", Index)
 	router.HandlerFunc("POST", "/", InsertEventHandleFunc)
 
-	setupLog.Info(fmt.Sprintf("Webhookd listens on: 0.0.0.0:%s", port))
+	setupLog.Info(fmt.Sprintf("daemon listens on: 0.0.0.0:%s", port))
 	setupLog.Info(http.ListenAndServe(fmt.Sprintf(":%s", port), router).Error())
 }
 

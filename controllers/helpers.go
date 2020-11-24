@@ -21,7 +21,7 @@ func (r *TenantReconciler) desiredDeployment(tenant operatorsv1alpha1.Tenant) (a
 	depl := appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{APIVersion: appsv1.SchemeGroupVersion.String(), Kind: "Deployment"},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      tenant.Name,
+			Name:      "qox",
 			Namespace: tenant.Namespace,
 		},
 		Spec: appsv1.DeploymentSpec{
@@ -41,6 +41,7 @@ func (r *TenantReconciler) desiredDeployment(tenant operatorsv1alpha1.Tenant) (a
 							Ports: []corev1.ContainerPort{
 								{ContainerPort: 7000, Name: "http", Protocol: "TCP"},
 								{ContainerPort: 5040, Name: "gowork", Protocol: "TCP"},
+								{ContainerPort: 9876, Name: "webhook", Protocol: "TCP"},
 							},
 							// Resources: *tenant.Spec.Frontend.Resources.DeepCopy(),
 							EnvFrom: []corev1.EnvFromSource{
@@ -115,6 +116,7 @@ func (r *TenantReconciler) desiredService(tenant operatorsv1alpha1.Tenant) (core
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
 				{Name: "http", Port: 80, Protocol: "TCP", TargetPort: intstr.FromString("http")},
+				{Name: "webhook", Port: 9876, Protocol: "TCP", TargetPort: intstr.FromString("webhook")},
 			},
 			Selector: map[string]string{"tenant": tenant.Name},
 			Type:     corev1.ServiceTypeClusterIP,

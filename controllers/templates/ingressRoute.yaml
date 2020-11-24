@@ -9,6 +9,12 @@ spec:
   entryPoints:
     - web
   routes:
+  - match: Host("{{ .Host }}") && PathPrefix(`/webhookd`)
+    kind: Rule
+    services:
+    - name: qox
+      namespace: {{ .Namespace }}
+      port: 9876
   - match: Host("{{ .Host }}")
     kind: Rule
     services:
